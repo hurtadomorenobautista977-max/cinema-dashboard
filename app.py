@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
+import requests
+import json
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -15,7 +16,6 @@ st.set_page_config(
 # --- RTL and Custom Styles ---
 st.markdown("""
 <style>
-
     /* Hide Streamlit default header, toolbar, menu, and footer */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
@@ -52,7 +52,43 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initial Mock Data for demonstration / offline use
+# --- Supabase Helper Functions ---
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+
+def get_supabase_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+
+def fetch_cinemas():
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            res = requests.get(f"{SUPABASE_URL}/rest/v1/cinemas?select=*", headers=get_supabase_headers(), timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                if data:
+                    return pd.DataFrame(data)
+        except Exception as e:
+            pass
+    return None
+
+def insert_cinema(data_dict):
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            res = requests.post(f"{SUPABASE_URL}/rest/v1/cinemas", headers=get_supabase_headers(), json=data_dict, timeout=5)
+            if res.status_code in [200, 201]:
+                return True, "با موفقیت در دیتابیس Supabase ذخیره شد."
+            else:
+                return False, f"خطا در دیتابیس: {res.text}"
+        except Exception as e:
+            return False, f"خطا در ارتباط: {str(e)}"
+    return False, "کلیدهای Supabase تنظیم نشده‌اند."
+
+# Initial Mock Data fallback
 if 'local_data' not in st.session_state:
     st.session_state.local_data = pd.DataFrame([
         {
@@ -96,18 +132,31 @@ if 'local_data' not in st.session_state:
         }
     ])
 
-df = st.session_state.local_data.copy()
+# Try fetching from Supabase
+db_df = fetch_cinemas()
+if db_df is not None and not db_df.empty:
+    df = db_df.copy()
+else:
+    df = st.session_state.local_data.copy()
+
+# Ensure required columns exist
+for col, default in [
+    ('score_location', 3.5), ('score_physical', 3.5), ('score_technical', 3.5),
+    ('score_operations', 3.5), ('score_amenities', 3.5), ('total_seats', 100), ('operational_seats', 100)
+]:
+    if col not in df.columns:
+        df[col] = default
 
 # Calculate Weighted Score & Seat Efficiency
 df['weighted_score'] = (
-    df['score_location'] * 0.20 +
-    df['score_physical'] * 0.25 +
-    df['score_technical'] * 0.25 +
-    df['score_operations'] * 0.15 +
-    df['score_amenities'] * 0.15
+    df['score_location'].astype(float) * 0.20 +
+    df['score_physical'].astype(float) * 0.25 +
+    df['score_technical'].astype(float) * 0.25 +
+    df['score_operations'].astype(float) * 0.15 +
+    df['score_amenities'].astype(float) * 0.15
 ).round(2)
 
-df['seat_efficiency'] = ((df['operational_seats'] / df['total_seats'].replace(0, 1)) * 100).round(1)
+df['seat_efficiency'] = ((df['operational_seats'].astype(float) / df['total_seats'].astype(float).replace(0, 1)) * 100).round(1)
 
 # --- Sidebar Menu ---
 st.sidebar.title("سامانه راهبری سینماها")
@@ -124,7 +173,7 @@ if menu == "📊 داشبورد تحلیلی":
     with col1:
         st.metric("تعداد کل سینماها", len(df))
     with col2:
-        st.metric("مجموع صندلی‌های فعال", f"{df['operational_seats'].sum():,}")
+        st.metric("مجموع صندلی‌های فعال", f"{int(df['operational_seats'].sum()):,}")
     with col3:
         st.metric("میانگین امتیاز کل", f"{df['weighted_score'].mean():.2f} / 5")
     with col4:
@@ -156,11 +205,11 @@ if menu == "📊 داشبورد تحلیلی":
 
         categories = ['موقعیت مکانی', 'فضای عمومی', 'تجهیزات فنی', 'راهبری و مدیریت', 'امکانات جانبی']
         scores = [
-            c_data['score_location'],
-            c_data['score_physical'],
-            c_data['score_technical'],
-            c_data['score_operations'],
-            c_data['score_amenities']
+            float(c_data['score_location']),
+            float(c_data['score_physical']),
+            float(c_data['score_technical']),
+            float(c_data['score_operations']),
+            float(c_data['score_amenities'])
         ]
 
         fig_radar = go.Figure(data=go.Scatterpolar(
@@ -183,7 +232,7 @@ elif menu == "📝 ثبت سینما و ارزیابی جدید":
     with st.form("cinema_form"):
         col_a, col_b = st.columns(2)
         with col_a:
-            name = st.text_input("نام سینما:")
+            name = st.text_input("نام سینما (اجباری):")
             city = st.text_input("شهر:")
             halls = st.number_input("تعداد سالن:", min_value=1, value=2)
         with col_b:
@@ -203,23 +252,34 @@ elif menu == "📝 ثبت سینما و ارزیابی جدید":
             
         submitted = st.form_submit_button("💾 ثبت اطلاعات در سامانه")
         
-        if submitted and name:
-            new_row = {
-                "id": len(st.session_state.local_data) + 1,
-                "name": name,
-                "city": city,
-                "halls": halls,
-                "total_seats": total_seats,
-                "operational_seats": op_seats,
-                "score_location": s_loc,
-                "score_physical": s_phy,
-                "score_technical": s_tech,
-                "score_operations": s_ops,
-                "score_amenities": s_amen,
-            }
-            st.session_state.local_data = pd.concat([st.session_state.local_data, pd.DataFrame([new_row])], ignore_index=True)
-            st.success(f"اطلاعات سینمای «{name}» با موفقیت ثبت گردید.")
-            st.rerun()
+        if submitted:
+            if not name.strip():
+                st.error("❌ لطفاً نام سینما را وارد کنید.")
+            else:
+                new_row = {
+                    "name": name.strip(),
+                    "city": city.strip() if city else "نامشخص",
+                    "halls": int(halls),
+                    "total_seats": int(total_seats),
+                    "operational_seats": int(op_seats),
+                    "score_location": float(s_loc),
+                    "score_physical": float(s_phy),
+                    "score_technical": float(s_tech),
+                    "score_operations": float(s_ops),
+                    "score_amenities": float(s_amen),
+                }
+                
+                # Attempt insert into Supabase
+                success, msg = insert_cinema(new_row)
+                if success:
+                    st.success(f"✅ سینمای «{name}» با موفقیت در دیتابیس ذخیره شد!")
+                    st.rerun()
+                else:
+                    # Save to local session state as fallback
+                    new_row["id"] = len(st.session_state.local_data) + 1
+                    st.session_state.local_data = pd.concat([st.session_state.local_data, pd.DataFrame([new_row])], ignore_index=True)
+                    st.success(f"✅ سینمای «{name}» در سامانه ثبت شد. ({msg})")
+                    st.rerun()
 
 elif menu == "🗃️ مدیریت داده‌ها و خروجی":
     st.subheader("جدول کل داده‌های ثبت‌شده")
