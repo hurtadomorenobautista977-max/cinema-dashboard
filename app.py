@@ -15,6 +15,17 @@ st.set_page_config(
 # --- RTL and Custom Styles ---
 st.markdown("""
 <style>
+
+    /* Hide Streamlit default header, toolbar, menu, and footer */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stAppHeader {display: none !important;}
+    [data-testid="stHeader"] {display: none !important;}
+    [data-testid="stToolbar"] {display: none !important;}
+    [data-testid="stDecoration"] {display: none !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+
     @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
     
     html, body, [class*="css"], div, h1, h2, h3, h4, h5, h6, p, span, label {
