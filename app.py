@@ -53,8 +53,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Supabase Helper Functions ---
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "").strip().rstrip('/')
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "").strip()
 
 def get_supabase_headers():
     return {
@@ -67,7 +67,8 @@ def get_supabase_headers():
 def fetch_cinemas():
     if SUPABASE_URL and SUPABASE_KEY:
         try:
-            res = requests.get(f"{SUPABASE_URL}/rest/v1/cinemas?select=*", headers=get_supabase_headers(), timeout=5)
+            url = f"{SUPABASE_URL}/rest/v1/cinemas?select=*&order=id.asc"
+            res = requests.get(url, headers=get_supabase_headers(), timeout=5)
             if res.status_code == 200:
                 data = res.json()
                 if data:
@@ -77,16 +78,18 @@ def fetch_cinemas():
     return None
 
 def insert_cinema(data_dict):
-    if SUPABASE_URL and SUPABASE_KEY:
-        try:
-            res = requests.post(f"{SUPABASE_URL}/rest/v1/cinemas", headers=get_supabase_headers(), json=data_dict, timeout=5)
-            if res.status_code in [200, 201]:
-                return True, "با موفقیت در دیتابیس Supabase ذخیره شد."
-            else:
-                return False, f"خطا در دیتابیس: {res.text}"
-        except Exception as e:
-            return False, f"خطا در ارتباط: {str(e)}"
-    return False, "کلیدهای Supabase تنظیم نشده‌اند."
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return False, "کلیدهای Supabase در Secrets تنظیم نشده‌اند."
+    
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/cinemas"
+        res = requests.post(url, headers=get_supabase_headers(), json=data_dict, timeout=7)
+        if res.status_code in [200, 201]:
+            return True, "با موفقیت در دیتابیس Supabase ذخیره شد."
+        else:
+            return False, f"خطای دیتابیس ({res.status_code}): {res.text}"
+    except Exception as e:
+        return False, f"خطای ارتباط با سرور: {str(e)}"
 
 # Initial Mock Data fallback
 if 'local_data' not in st.session_state:
@@ -134,8 +137,10 @@ if 'local_data' not in st.session_state:
 
 # Try fetching from Supabase
 db_df = fetch_cinemas()
+using_db = False
 if db_df is not None and not db_df.empty:
     df = db_df.copy()
+    using_db = True
 else:
     df = st.session_state.local_data.copy()
 
@@ -160,6 +165,11 @@ df['seat_efficiency'] = ((df['operational_seats'].astype(float) / df['total_seat
 
 # --- Sidebar Menu ---
 st.sidebar.title("سامانه راهبری سینماها")
+if using_db:
+    st.sidebar.success("🟢 متصل به دیتابیس Supabase")
+else:
+    st.sidebar.warning("🟡 حالت آفلاین / داده‌های محلی")
+
 menu = st.sidebar.radio("منوی اصلی", ["📊 داشبورد تحلیلی", "📝 ثبت سینما و ارزیابی جدید", "🗃️ مدیریت داده‌ها و خروجی"])
 
 # --- Header ---
@@ -272,14 +282,10 @@ elif menu == "📝 ثبت سینما و ارزیابی جدید":
                 # Attempt insert into Supabase
                 success, msg = insert_cinema(new_row)
                 if success:
-                    st.success(f"✅ سینمای «{name}» با موفقیت در دیتابیس ذخیره شد!")
+                    st.success(f"✅ سینمای «{name}» با موفقیت در دیتابیس Supabase ذخیره شد!")
                     st.rerun()
                 else:
-                    # Save to local session state as fallback
-                    new_row["id"] = len(st.session_state.local_data) + 1
-                    st.session_state.local_data = pd.concat([st.session_state.local_data, pd.DataFrame([new_row])], ignore_index=True)
-                    st.success(f"✅ سینمای «{name}» در سامانه ثبت شد. ({msg})")
-                    st.rerun()
+                    st.error(f"❌ عدم امکان ثبت در دیتابیس: {msg}")
 
 elif menu == "🗃️ مدیریت داده‌ها و خروجی":
     st.subheader("جدول کل داده‌های ثبت‌شده")
