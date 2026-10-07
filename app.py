@@ -65,17 +65,23 @@ def get_supabase_headers():
     }
 
 def fetch_cinemas():
-    if SUPABASE_URL and SUPABASE_KEY:
-        try:
-            url = f"{SUPABASE_URL}/rest/v1/cinemas?select=*&order=id.asc"
-            res = requests.get(url, headers=get_supabase_headers(), timeout=5)
-            if res.status_code == 200:
-                data = res.json()
-                if data:
-                    return pd.DataFrame(data)
-        except Exception as e:
-            pass
-    return None
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return None, "تنظیمات Secrets انجام نشده است."
+    
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/cinemas?select=*&order=id.asc"
+        res = requests.get(url, headers=get_supabase_headers(), timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            return pd.DataFrame(data), "موفق"
+        elif res.status_code == 401:
+            return None, "خطای 401 (کلید API نامعتبر است - به کلید eyJ نیاز دارید)"
+        elif res.status_code == 404:
+            return None, "خطای 404 (جدول cinemas در دیتابیس یافت نشد)"
+        else:
+            return None, f"خطای {res.status_code}: {res.text}"
+    except Exception as e:
+        return None, f"خطای ارتباط: {str(e)}"
 
 def insert_cinema(data_dict):
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -136,9 +142,9 @@ if 'local_data' not in st.session_state:
     ])
 
 # Try fetching from Supabase
-db_df = fetch_cinemas()
+db_df, db_status = fetch_cinemas()
 using_db = False
-if db_df is not None and not db_df.empty:
+if db_df is not None:
     df = db_df.copy()
     using_db = True
 else:
@@ -168,7 +174,7 @@ st.sidebar.title("سامانه راهبری سینماها")
 if using_db:
     st.sidebar.success("🟢 متصل به دیتابیس Supabase")
 else:
-    st.sidebar.warning("🟡 حالت آفلاین / داده‌های محلی")
+    st.sidebar.warning(f"🟡 حالت آفلاین / داده‌های محلی\n({db_status})")
 
 menu = st.sidebar.radio("منوی اصلی", ["📊 داشبورد تحلیلی", "📝 ثبت سینما و ارزیابی جدید", "🗃️ مدیریت داده‌ها و خروجی"])
 
