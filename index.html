@@ -502,11 +502,14 @@
         }
 
         async function submitEval() { if (!activeAdmin) return;
-            const name = document.getElementById('ev-name').value;
+            const name = document.getElementById('ev-name').value.trim();
             if(!name) { showToast("وارد کردن نام سینما الزامی است.", "error"); return; }
 
             let total_score = 0;
             let evData = {};
+            for (const cat of STATE.schema) for (const p of cat.parameters) { const input = document.getElementById('ev_sc_' + cat.id + '_' + p.id); const score = Number(input?.value); if (!input || !input.value.trim() || !Number.isFinite(score) || score < 0 || score > 5) { showToast('امتیاز باید بین صفر و پنج باشد.', 'error'); return; } }
+            for (const id of ['ev-halls','ev-total','ev-op','ev-nom','ev-shows']) { const v = document.getElementById(id).value; if (!v.trim() || !Number.isInteger(Number(v)) || Number(v) < 0) { showToast('مقادیر ظرفیت و تعداد باید عدد صحیح نامنفی باشند.', 'error'); return; } }
+            if (Number(document.getElementById('ev-op').value) > Number(document.getElementById('ev-total').value)) { showToast('صندلی عملیاتی از ظرفیت کل بیشتر است.', 'error'); return; }
 
             STATE.schema.forEach(cat => {
                 evData[cat.id] = { score: 0, parameters: {} };
@@ -523,8 +526,8 @@
 
             const data = {
                 name: name, province: document.getElementById('ev-prov').value || 'نامشخص', city: document.getElementById('ev-city').value || 'نامشخص', address: document.getElementById('ev-address').value,
-                halls: parseInt(document.getElementById('ev-halls').value)||1, total_seats: parseInt(document.getElementById('ev-total').value)||100, operational_seats: parseInt(document.getElementById('ev-op').value)||100,
-                nominal_capacity: parseInt(document.getElementById('ev-nom').value)||100, daily_shows: parseInt(document.getElementById('ev-shows').value)||10, hall_seats_detail: document.getElementById('ev-details').value,
+                halls: Number(document.getElementById('ev-halls').value), total_seats: Number(document.getElementById('ev-total').value), operational_seats: Number(document.getElementById('ev-op').value),
+                nominal_capacity: Number(document.getElementById('ev-nom').value), daily_shows: Number(document.getElementById('ev-shows').value), hall_seats_detail: document.getElementById('ev-details').value,
                 evaluation_data: evData, total_score: total_score.toFixed(2)
             };
 
@@ -577,6 +580,9 @@
         const rmC = c => { STATE.schema.splice(c, 1); renderSchemaEditor(); }
 
         async function saveSchema() { if (!activeAdmin) return;
+            const validWeight = n => Number.isFinite(n) && n >= 0 && n <= 1;
+            const sumOne = n => Math.abs(n - 1) < 0.001;
+            if (!STATE.schema.length || STATE.schema.some(c => !c.name?.trim() || !validWeight(c.weight) || !c.parameters?.length || c.parameters.some(p => !p.name?.trim() || !validWeight(p.weight)) || !sumOne(c.parameters.reduce((a,p) => a + p.weight, 0))) || !sumOne(STATE.schema.reduce((a,c) => a + c.weight, 0))) { showToast('مجموع وزن‌ها در هر سطح باید یک باشد و نام‌ها خالی نباشند.', 'error'); return; }
             try {
                 const { error } = await supabase.from('app_config').upsert({ key: 'evaluation_schema', value: STATE.schema });
                 if (error) throw error;
