@@ -522,7 +522,7 @@
                 evData[cat.id] = { score: 0, parameters: {} };
                 let catScore = 0;
                 cat.parameters.forEach(p => {
-                    const pScore = parseFloat(document.getElementById(`ev_sc_${p.id}`).value) || 0;
+                    const pScore = parseFloat(document.getElementById(`ev_sc_${cat.id}_${p.id}`).value) || 0;
                     const pVal = document.getElementById(`ev_val_${cat.id}_${p.id}`).value;
                     evData[cat.id].parameters[p.id] = { score: pScore, value: pVal };
                     catScore += (pScore * p.weight);
