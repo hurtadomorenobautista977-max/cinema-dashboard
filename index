@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت راهبری سینماها | بهمن سبز</title>
+    
+    <!-- فونت‌ها و آیکون‌ها -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- فریم‌ورک‌ها -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- پیکربندی قالب رنگی Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Vazirmatn', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669', 900: '#064e3b' },
+                        navy: '#0f172a',
+                        surface: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        
+        /* اسکرول‌بار نرم و مدرن */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* انیمیشن‌های نرم */
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+        
+        /* استایل منوی فعال سایدبار */
+        .nav-item.active { background-color: #10b981; color: white; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4); font-weight: 800; }
+        .nav-item.active i { color: white !important; }
+        
+        /* المان‌های فرم کاملاً کرو (Curve) */
+        input, select, textarea { 
+            border-radius: 16px !important; border: 1px solid #e2e8f0; padding: 12px 16px; outline: none; transition: border-color 0.2s; background-color: #f8fafc;
+        }
+        input:focus, select:focus, textarea:focus { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); background-color: white; }
+        
+        /* کارت‌های دیتالیست مینیمال */
+        .data-row { 
+            background: white; border-radius: 24px; padding: 16px 24px; margin-bottom: 16px; display: flex; align-items: center; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); border: 1px solid #f1f5f9; transition: transform 0.2s, box-shadow 0.2s; 
+        }
+        .data-row:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -8px rgba(0,0,0,0.08); border-color: #e2e8f0; }
+        
+        /* پنهان کردن بخش‌ها */
+        .view-section { display: none; animation: fadeIn 0.4s ease forwards; }
+        .view-section.active-view { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- سایدبار سرمه‌ای مینیمال -->
+    <aside class="w-72 bg-navy text-slate-300 flex flex-col transition-all h-full shadow-2xl z-20">
+        <div class="h-28 flex items-center justify-center border-b border-slate-800">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-[20px] bg-brand-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/40">
+                    <i class="bi bi-camera-reels-fill text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-white font-black text-xl tracking-wide">بهمن سبز</h1>
+                    <p class="text-xs text-brand-500 font-bold mt-1">مدیریت راهبری</p>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-5 py-8 space-y-3 overflow-y-auto" id="sidebar-nav">
+            <a href="#" data-target="dashboard" class="nav-item active flex items-center gap-4 px-4 py-4 rounded-[20px] cursor-pointer text-sm font-medium hover:bg-slate-800">
+                <i class="bi bi-grid-1x2-fill text-xl text-slate-400 transition-colors"></i> داشبورد تحلیلی
+            </a>
+            <a href="#" data-target="profile" class="nav-item flex items-center gap-4 px-4 py-4 rounded-[20px] cursor-pointer text-sm font-medium hover:bg-slate-800">
+                <i class="bi bi-person-vcard-fill text-xl text-slate-400 transition-colors"></i> پروفایل جامع سینما
+            </a>
+            <a href="#" data-target="evaluate" class="nav-item flex items-center gap-4 px-4 py-4 rounded-[20px] cursor-pointer text-sm font-medium hover:bg-slate-800">
+                <i class="bi bi-clipboard2-check-fill text-xl text-slate-400 transition-colors"></i> ثبت ارزیابی هوشمند
+            </a>
+            <a href="#" data-target="settings" class="nav-item flex items-center gap-4 px-4 py-4 rounded-[20px] cursor-pointer text-sm font-medium hover:bg-slate-800">
+                <i class="bi bi-sliders text-xl text-slate-400 transition-colors"></i> مدیریت پارامترها
+            </a>
+            <a href="#" data-target="backup" class="nav-item flex items-center gap-4 px-4 py-4 rounded-[20px] cursor-pointer text-sm font-medium hover:bg-slate-800">
+                <i class="bi bi-cloud-arrow-down-fill text-xl text-slate-400 transition-colors"></i> خروجی و بک‌آپ
+            </a>
+        </nav>
+    </aside>
+
+    <!-- محتوای اصلی -->
+    <main class="flex-1 flex flex-col h-full bg-surface relative overflow-hidden">
+        
+        <!-- هدر شناور -->
+        <header class="h-24 bg-surface/80 backdrop-blur-md px-10 flex items-center justify-between z-10 sticky top-0">
+            <div>
+                <h2 id="page-title" class="text-2xl font-black text-navy">داشبورد شبکه</h2>
+                <p id="page-subtitle" class="text-sm text-slate-500 mt-1">نمای کلی از وضعیت سینماهای ثبت شده در سیستم</p>
+            </div>
+            <div id="connection-status" class="px-5 py-2.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-sm font-bold flex items-center gap-2 shadow-sm">
+                <i class="bi bi-arrow-repeat animate-spin text-lg"></i> در حال اتصال به دیتابیس...
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-10 pb-10" id="main-container">
+            
+            <!-- بخش ۱: داشبورد -->
+            <div id="view-dashboard" class="view-section active-view">
+                <!-- کارت‌های متریک (Curve) -->
+                <div class="grid grid-cols-4 gap-6 mb-10">
+                    <div class="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-[20px] bg-brand-50 text-brand-500 flex items-center justify-center text-3xl"><i class="bi bi-buildings-fill"></i></div>
+                        <div><p class="text-sm font-bold text-slate-400 mb-1">کل سینماها</p><h3 id="kpi-cinemas" class="text-3xl font-black text-navy">-</h3></div>
+                    </div>
+                    <div class="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-[20px] bg-blue-50 text-blue-500 flex items-center justify-center text-3xl"><i class="bi bi-people-fill"></i></div>
+                        <div><p class="text-sm font-bold text-slate-400 mb-1">صندلی عملیاتی</p><h3 id="kpi-seats" class="text-3xl font-black text-navy">-</h3></div>
+                    </div>
+                    <div class="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-[20px] bg-amber-50 text-amber-500 flex items-center justify-center text-3xl"><i class="bi bi-star-fill"></i></div>
+                        <div><p class="text-sm font-bold text-slate-400 mb-1">میانگین امتیاز</p><h3 id="kpi-score" class="text-3xl font-black text-navy">-</h3></div>
+                    </div>
+                    <div class="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-[20px] bg-purple-50 text-purple-500 flex items-center justify-center text-3xl"><i class="bi bi-pie-chart-fill"></i></div>
+                        <div><p class="text-sm font-bold text-slate-400 mb-1">بهره‌وری فضا</p><h3 id="kpi-efficiency" class="text-3xl font-black text-navy">-</h3></div>
+                    </div>
+                </div>
+
+                <!-- لیست سینماها -->
+                <div class="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-black text-xl text-navy">وضعیت سینماهای شبکه</h3>
+                    </div>
+                    <div class="flex px-6 mb-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        <div class="flex-[3]">مشخصات سینما</div>
+                        <div class="flex-[2] text-center">ظرفیت (سالن/صندلی)</div>
+                        <div class="flex-[2] text-center">بهره‌وری صندلی</div>
+                        <div class="flex-[2] text-center">امتیاز راهبری</div>
+                        <div class="flex-[1] text-left">پروفایل</div>
+                    </div>
+                    <div id="cinemas-list-container" class="space-y-4">
+                        <div class="text-center py-10 text-slate-400">در حال بارگذاری اطلاعات...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- بخش ۲: پروفایل سینما -->
+            <div id="view-profile" class="view-section">
+                <div class="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 mb-8 flex justify-between items-center relative overflow-hidden">
+                    <div class="absolute -left-10 -top-10 w-48 h-48 bg-brand-50 rounded-full blur-3xl opacity-50"></div>
+                    <div class="relative z-10 flex gap-6 items-center flex-[2]">
+                        <div class="w-24 h-24 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 text-4xl border-4 border-white shadow-lg"><i class="bi bi-building"></i></div>
+                        <div class="w-full max-w-md">
+                            <label class="block text-xs font-bold text-slate-400 mb-2">انتخاب سینما جهت مشاهده پروفایل:</label>
+                            <select id="profile-selector" class="w-full bg-slate-50 font-bold text-navy text-lg"></select>
+                        </div>
+                    </div>
+                    <div class="relative z-10 text-center bg-brand-50 rounded-[24px] px-10 py-5 border border-brand-100">
+                        <p class="text-sm font-bold text-brand-600 mb-1">امتیاز نهایی راهبری</p>
+                        <h2 id="prof-score" class="text-5xl font-black text-brand-500">0.00</h2>
+                    </div>
+                </div>
+
+                <div id="profile-content" class="hidden space-y-8">
+                    <!-- آمار پایه‌ای -->
+                    <div class="grid grid-cols-4 gap-6">
+                        <div class="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center justify-between">
+                            <div><p class="text-xs font-bold text-slate-400 mb-1">تعداد سالن</p><p id="prof-halls" class="font-black text-2xl text-navy">-</p></div>
+                            <div class="w-12 h-12 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl"><i class="bi bi-door-open-fill"></i></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center justify-between">
+                            <div><p class="text-xs font-bold text-slate-400 mb-1">صندلی عملیاتی</p><p id="prof-op" class="font-black text-2xl text-navy">-</p></div>
+                            <div class="w-12 h-12 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl"><i class="bi bi-people-fill"></i></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center justify-between">
+                            <div><p class="text-xs font-bold text-slate-400 mb-1">ظرفیت اسمی</p><p id="prof-nom" class="font-black text-2xl text-navy">-</p></div>
+                            <div class="w-12 h-12 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl"><i class="bi bi-building-fill-check"></i></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center justify-between">
+                            <div><p class="text-xs font-bold text-slate-400 mb-1">سانس روزانه</p><p id="prof-shows" class="font-black text-2xl text-navy">-</p></div>
+                            <div class="w-12 h-12 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl"><i class="bi bi-clock-history"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-8">
+                        <!-- چارت راداری -->
+                        <div class="col-span-1 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 flex flex-col items-center">
+                            <h3 class="font-black text-lg text-navy mb-6">تحلیل تعادل محورها</h3>
+                            <div class="w-full aspect-square"><canvas id="radarChart"></canvas></div>
+                        </div>
+                        
+                        <!-- ریز نمرات و توضیحات پویا -->
+                        <div class="col-span-2 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 h-[600px] overflow-y-auto">
+                            <h3 class="font-black text-lg text-navy mb-6"><i class="bi bi-card-checklist text-brand-500 ml-2"></i>ریز امتیازات و ارزیابی پارامترها</h3>
+                            <div id="prof-axes-container" class="space-y-6">
+                                <!-- محتوای داینامیک از دیتابیس در اینجا رندر می‌شود -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="profile-empty" class="text-center py-20 text-slate-400 bg-white rounded-[32px] border border-slate-100">برای مشاهده جزئیات، یک سینما را از منوی بالا انتخاب کنید.</div>
+            </div>
+
+            <!-- بخش ۳: فرم ثبت ارزیابی هوشمند -->
+            <div id="view-evaluate" class="view-section">
+                <div class="bg-white rounded-[32px] p-10 shadow-sm border border-slate-100 max-w-5xl mx-auto">
+                    <h3 class="font-black text-xl text-navy mb-6 pb-4 border-b border-slate-100"><i class="bi bi-1-circle-fill text-brand-500 ml-2"></i>مشخصات و ظرفیت سینما</h3>
+                    
+                    <div class="grid grid-cols-3 gap-6 mb-10">
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">نام سینما *</label><input type="text" id="ev-name" class="w-full" placeholder="مثال: سینما آزادی"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">استان</label><input type="text" id="ev-prov" class="w-full"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">شهر</label><input type="text" id="ev-city" class="w-full"></div>
+                        
+                        <div class="col-span-3"><label class="block text-xs font-bold text-slate-500 mb-2">آدرس دقیق</label><input type="text" id="ev-address" class="w-full"></div>
+                        
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">تعداد سالن</label><input type="number" id="ev-halls" value="1" class="w-full text-center"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">کل صندلی</label><input type="number" id="ev-total" value="100" class="w-full text-center"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">ظرفیت اسمی</label><input type="number" id="ev-nom" value="100" class="w-full text-center"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">صندلی عملیاتی</label><input type="number" id="ev-op" value="100" class="w-full text-center"></div>
+                        <div class="col-span-1"><label class="block text-xs font-bold text-slate-500 mb-2">سانس روزانه</label><input type="number" id="ev-shows" value="10" class="w-full text-center"></div>
+                    </div>
+
+                    <h3 class="font-black text-xl text-navy mb-6 pb-4 border-b border-slate-100 mt-12"><i class="bi bi-2-circle-fill text-brand-500 ml-2"></i>ارزیابی پارامترهای تخصصی</h3>
+                    <p class="text-sm text-slate-500 mb-8">ساختار فرم زیر به صورت پویا از دیتابیس خوانده می‌شود. برای هر پارامتر امتیاز (۰ تا ۵) و توضیحات متنی وارد کنید.</p>
+                    
+                    <div id="eval-dynamic-form" class="space-y-8">
+                        <!-- فرم‌های پویا بر اساس schema اینجا قرار می‌گیرند -->
+                    </div>
+
+                    <div class="mt-12 pt-8 border-t border-slate-100 flex justify-end">
+                        <button onclick="submitEvaluation()" class="bg-brand-500 hover:bg-brand-600 text-white px-10 py-4 rounded-full font-black shadow-lg shadow-brand-500/30 transition-all flex items-center gap-3 text-lg">
+                            <i class="bi bi-cloud-arrow-up-fill text-2xl"></i> ذخیره کامل ارزیابی در سیستم
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- بخش ۴: مدیریت پویا شاخص‌ها و پارامترها -->
+            <div id="view-settings" class="view-section">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="text-2xl font-black text-navy">مدیریت ساختار دیتابیس</h2>
+                        <p class="text-sm text-slate-500 mt-1">تغییر نام، وزن و ساختار شاخص‌ها و پارامترها به صورت درختی</p>
+                    </div>
+                    <button onclick="saveSchemaToDB()" class="bg-navy hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-all flex items-center gap-2">
+                        <i class="bi bi-save-fill"></i> اعمال تغییرات در سرور
+                    </button>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-100 rounded-[24px] p-5 mb-8 flex gap-4 items-start">
+                    <i class="bi bi-info-circle-fill text-blue-500 text-2xl"></i>
+                    <div>
+                        <p class="text-sm font-bold text-blue-900">نکته مهم در وزن‌دهی:</p>
+                        <p class="text-xs text-blue-700 mt-1">مجموع وزن شاخص‌های اصلی باید معادل ۱.۰ باشد. همچنین در داخل هر شاخص، مجموع وزن پارامترهای زیرمجموعه نیز باید معادل ۱.۰ باشد تا محاسبات ریاضی داشبورد صحیح انجام شود.</p>
+                    </div>
+                </div>
+
+                <div id="schema-editor-container" class="space-y-6">
+                    <!-- ادیتور درختی به صورت پویا رندر می‌شود -->
+                </div>
+                
+                <button onclick="addCategory()" class="mt-8 border-2 border-dashed border-slate-300 text-slate-500 hover:border-brand-500 hover:text-brand-500 hover:bg-brand-50 w-full py-5 rounded-[24px] font-black transition-all flex justify-center items-center gap-3 text-lg">
+                    <i class="bi bi-plus-circle-fill"></i> افزودن شاخص اصلی جدید
+                </button>
+            </div>
+
+            <!-- بخش ۵: خروجی و بک‌آپ -->
+            <div id="view-backup" class="view-section">
+                <div class="bg-white rounded-[32px] p-12 shadow-sm border border-slate-100 text-center max-w-xl mx-auto mt-10">
+                    <div class="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center text-5xl text-slate-300 mx-auto mb-8 border border-slate-100"><i class="bi bi-safe2-fill"></i></div>
+                    <h3 class="font-black text-2xl text-navy mb-2">استخراج امن داده‌ها</h3>
+                    <p class="text-sm text-slate-500 mb-8">برای دریافت فول‌بکاپ JSON دیتابیس، رمز عبور استاتیک مدیریت را وارد کنید.</p>
+                    
+                    <div class="bg-slate-50 p-6 rounded-[24px] mb-8">
+                        <input type="password" id="backup-pwd" placeholder="رمز عبور..." class="w-full text-center font-bold text-lg bg-white mb-4 py-4">
+                        <button onclick="downloadBackup()" class="w-full bg-navy text-white py-4 rounded-full font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-3 text-lg shadow-lg">
+                            <i class="bi bi-download"></i> تایید و دانلود فایل
+                        </button>
+                    </div>
+                    <p id="backup-msg" class="text-sm font-bold hidden"></p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // ==========================================
+        // 1. CONFIGURATION
+        // ==========================================
+        const SUPABASE_URL = "https://ccjykdpjprjaocglypij.supabase.co";
+        // توجه: کلید خود را اینجا جایگزین کنید
+        const SUPABASE_KEY = "اینجا_کلید_خود_را_وارد_کنید"; 
+        
+        let APP_STATE = { cinemas: [], schema: [], radarChart: null };
+
+        const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+
+        // ==========================================
+        // 2. INITIALIZATION & ROUTING
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            setupNavigation();
+            await fetchAllData();
+        });
+
+        function setupNavigation() {
+            const items = document.querySelectorAll('.nav-item');
+            const views = document.querySelectorAll('.view-section');
+            const titles = {
+                'dashboard': ['داشبورد تحلیلی شبکه', 'نمای کلی از عملکرد و رتبه‌بندی کیفی سینماها'],
+                'profile': ['پروفایل جامع سینما', 'جزئیات ریزنمرات، چک‌لیست‌ها و ظرفیت‌های هر سینما'],
+                'evaluate': ['ثبت ارزیابی هوشمند', 'ورود اطلاعات سینما و نمره‌دهی بر اساس پارامترهای مصوب'],
+                'settings': ['مدیریت پارامترها و وزن‌ها', 'ویرایش ساختار ارزیابی، شاخص‌ها و ضرایب اهمیت دیتابیس'],
+                'backup': ['خروجی و بک‌آپ اطلاعات', 'دریافت نسخه پشتیبان از کل دیتابیس']
+            };
+
+            items.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    items.forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    const target = item.getAttribute('data-target');
+                    views.forEach(v => v.classList.remove('active-view'));
+                    document.getElementById(`view-${target}`).classList.add('active-view');
+                    
+                    document.getElementById('page-title').innerText = titles[target][0];
+                    document.getElementById('page-subtitle').innerText = titles[target][1];
+
+                    // Trigger specific render actions
+                    if(target === 'dashboard') renderDashboard();
+                    if(target === 'profile') populateProfileSelector();
+                    if(target === 'evaluate') renderEvalForm();
+                    if(target === 'settings') renderSchemaEditor();
+                });
+            });
+        }
+
+        async function fetchAllData() {
+            const status = document.getElementById('connection-status');
+            if(SUPABASE_KEY.includes('اینجا')) {
+                status.className = "px-5 py-2.5 rounded-full bg-red-50 text-red-600 border border-red-200 text-sm font-bold flex items-center gap-2";
+                status.innerHTML = '<i class="bi bi-x-circle-fill text-lg"></i> کلید API وارد نشده است';
+                return;
+            }
+
+            try {
+                // Fetch Schema
+                const resS = await fetch(`${SUPABASE_URL}/rest/v1/app_config?key=eq.evaluation_schema`, { headers });
+                if(resS.ok) {
+                    const data = await resS.json();
+                    if(data.length > 0) APP_STATE.schema = data[0].value;
+                }
+
+                // Fetch Cinemas
+                const resC = await fetch(`${SUPABASE_URL}/rest/v1/cinemas?select=*&order=id.desc`, { headers });
+                if(resC.ok) APP_STATE.cinemas = await resC.json();
+
+                status.className = "px-5 py-2.5 rounded-full bg-brand-50 text-brand-600 border border-brand-200 text-sm font-bold flex items-center gap-2";
+                status.innerHTML = '<i class="bi bi-check-circle-fill text-lg"></i> متصل به پایگاه داده مرکزی';
+                
+                renderDashboard();
+            } catch (err) {
+                status.className = "px-5 py-2.5 rounded-full bg-red-50 text-red-600 border border-red-200 text-sm font-bold flex items-center gap-2";
+                status.innerHTML = '<i class="bi bi-wifi-off text-lg"></i> خطای ارتباط با سرور';
+            }
+        }
+
+        // ==========================================
+        // 3. DASHBOARD RENDERER
+        // ==========================================
+        function renderDashboard() {
+            const container = document.getElementById('cinemas-list-container');
+            const clist = APP_STATE.cinemas;
+            
+            if(clist.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">هیچ سینمایی در دیتابیس ثبت نشده است.</div>`;
+                return;
+            }
+
+            let totSeats = 0, sumScore = 0, sumEff = 0;
+            let html = '';
+
+            clist.forEach(c => {
+                const op = parseInt(c.operational_seats) || 0;
+                const tot = parseInt(c.total_seats) || 1;
+                const eff = ((op / tot) * 100).toFixed(1);
+                const score = parseFloat(c.total_score) || 0;
+                
+                totSeats += op; sumScore += score; sumEff += parseFloat(eff);
+
+                let badge = score >= 4 ? 'bg-brand-100 text-brand-700' : (score >= 3 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700');
+
+                html += `
+                <div class="data-row">
+                    <div class="flex-[3] flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 text-2xl"><i class="bi bi-camera-reels"></i></div>
+                        <div><h4 class="font-black text-navy text-lg">${c.name}</h4><p class="text-xs font-bold text-slate-400 mt-1"><i class="bi bi-geo-alt-fill"></i> ${c.province} - ${c.city}</p></div>
+                    </div>
+                    <div class="flex-[2] text-center font-bold text-slate-600"><span class="text-navy">${c.halls}</span> سالن <span class="text-slate-300 mx-2">|</span> <span class="text-navy">${op}</span> صندلی</div>
+                    <div class="flex-[2] text-center font-black text-slate-500">${eff}%</div>
+                    <div class="flex-[2] text-center"><span class="px-5 py-2 rounded-full font-black text-sm ${badge}">${score.toFixed(2)}</span></div>
+                    <div class="flex-[1] text-left">
+                        <button onclick="goToProfile(${c.id})" class="w-12 h-12 rounded-full bg-slate-50 text-slate-400 hover:bg-brand-500 hover:text-white transition-colors flex items-center justify-center shadow-sm"><i class="bi bi-arrow-left-short text-3xl"></i></button>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+            document.getElementById('kpi-cinemas').innerText = clist.length;
+            document.getElementById('kpi-seats').innerText = totSeats.toLocaleString();
+            document.getElementById('kpi-score').innerText = (sumScore / clist.length).toFixed(2);
+            document.getElementById('kpi-efficiency').innerText = (sumEff / clist.length).toFixed(1) + '%';
+        }
+
+        // ==========================================
+        // 4. PROFILE RENDERER
+        // ==========================================
+        function populateProfileSelector() {
+            const sel = document.getElementById('profile-selector');
+            sel.innerHTML = '<option value="">-- برای مشاهده، یک سینما را انتخاب کنید --</option>';
+            APP_STATE.cinemas.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            
+            sel.onchange = (e) => {
+                if(e.target.value) renderProfile(parseInt(e.target.value));
+                else { document.getElementById('profile-content').classList.add('hidden'); document.getElementById('profile-empty').classList.remove('hidden'); }
+            };
+        }
+
+        function goToProfile(id) {
+            document.querySelector('[data-target="profile"]').click();
+            setTimeout(() => { document.getElementById('profile-selector').value = id; renderProfile(id); }, 50);
+        }
+
+        function renderProfile(id) {
+            const c = APP_STATE.cinemas.find(x => x.id === id);
+            if(!c) return;
+
+            document.getElementById('profile-empty').classList.add('hidden');
+            document.getElementById('profile-content').classList.remove('hidden');
+
+            document.getElementById('prof-score').innerText = parseFloat(c.total_score).toFixed(2);
+            document.getElementById('prof-halls').innerText = c.halls;
+            document.getElementById('prof-op').innerText = c.operational_seats;
+            document.getElementById('prof-nom').innerText = c.nominal_capacity;
+            document.getElementById('prof-shows').innerText = c.daily_shows;
+
+            const evalData = c.evaluation_data || {};
+            let axesHtml = '';
+            let labels = [], scores = [];
+
+            APP_STATE.schema.forEach((cat, idx) => {
+                const catData = evalData[cat.id] || { score: 0, parameters: {} };
+                labels.push(cat.name);
+                scores.push(catData.score);
+
+                let paramsHtml = '';
+                cat.parameters.forEach(p => {
+                    const pData = catData.parameters[p.id] || { score: 0, value: '' };
+                    paramsHtml += `
+                    <div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0 hover:bg-white rounded-xl px-2 transition-colors">
+                        <div class="flex-[3]"><p class="font-bold text-sm text-slate-700">${p.name}</p><p class="text-xs text-slate-400 mt-1">وزن در شاخص: ${p.weight}</p></div>
+                        <div class="flex-[3] text-sm text-slate-500 bg-white border border-slate-100 p-2 rounded-xl truncate mx-4" title="${pData.value}">${pData.value || '<span class="text-slate-300">بدون توضیح</span>'}</div>
+                        <div class="flex-[1] text-left font-black text-lg text-brand-600 bg-brand-50 px-4 py-1 rounded-full text-center">${pData.score}</div>
+                    </div>`;
+                });
+
+                axesHtml += `
+                <div class="bg-slate-50 rounded-[24px] p-6 border border-slate-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-black text-navy flex items-center gap-2"><div class="w-8 h-8 bg-navy text-white rounded-full flex items-center justify-center text-xs">${idx+1}</div> ${cat.name} <span class="text-xs font-bold text-slate-400">(وزن کل: ${cat.weight})</span></h4>
+                        <span class="bg-navy text-white px-4 py-1.5 rounded-full text-sm font-black shadow-md">امتیاز محور: ${catData.score.toFixed(2)} / 5</span>
+                    </div>
+                    <div class="space-y-1">${paramsHtml}</div>
+                </div>`;
+            });
+            document.getElementById('prof-axes-container').innerHTML = axesHtml;
+
+            // رندر چارت راداری
+            if(APP_STATE.radarChart) APP_STATE.radarChart.destroy();
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            APP_STATE.radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: { labels: labels, datasets: [{ label: 'امتیاز', data: scores, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', pointBackgroundColor: '#064e3b', pointBorderWidth: 3, borderWidth: 3 }] },
+                options: { scales: { r: { min: 0, max: 5, ticks: { stepSize: 1, display: false }, grid: { color: '#e2e8f0' }, pointLabels: { font: { family: 'Vazirmatn', size: 12, weight: 'bold' }, color: '#0f172a' } } }, plugins: { legend: { display: false } } }
+            });
+        }
+
+        // ==========================================
+        // 5. DYNAMIC EVALUATION FORM
+        // ==========================================
+        function renderEvalForm() {
+            let html = '';
+            APP_STATE.schema.forEach((cat, cIdx) => {
+                let paramsHtml = '';
+                cat.parameters.forEach(p => {
+                    paramsHtml += `
+                    <div class="flex gap-6 items-center p-4 bg-slate-50 rounded-[20px] mb-3 border border-slate-100">
+                        <div class="flex-[3]"><p class="font-bold text-sm text-navy">${p.name}</p><p class="text-xs text-slate-400 mt-1">ضریب اهمیت در این محور: ${p.weight}</p></div>
+                        <div class="flex-[1]"><input type="number" min="0" max="5" step="0.5" value="3" id="ev-sc-${cat.id}-${p.id}" class="w-full text-center font-black text-brand-600 bg-white" placeholder="امتیاز (۰-۵)"></div>
+                        <div class="flex-[3]"><input type="text" id="ev-val-${cat.id}-${p.id}" class="w-full text-sm bg-white" placeholder="توضیحات متنی یا چک‌لیست (اختیاری)..."></div>
+                    </div>`;
+                });
+                html += `
+                <div class="mb-8">
+                    <h4 class="font-black text-lg text-brand-600 mb-4 flex items-center gap-3"><div class="w-10 h-10 bg-brand-100 rounded-[16px] flex items-center justify-center"><i class="bi bi-folder-fill"></i></div> ${cIdx+1}. ${cat.name} <span class="text-sm font-bold text-slate-400">(وزن: ${cat.weight})</span></h4>
+                    ${paramsHtml}
+                </div>`;
+            });
+            document.getElementById('eval-dynamic-form').innerHTML = html || '<p class="text-slate-400">ساختاری در دیتابیس یافت نشد.</p>';
+        }
+
+        async function submitEvaluation() {
+            const name = document.getElementById('ev-name').value;
+            if(!name) return alert("ورود نام سینما الزامی است.");
+
+            let total_cinema_score = 0;
+            let evalData = {};
+
+            APP_STATE.schema.forEach(cat => {
+                evalData[cat.id] = { score: 0, parameters: {} };
+                let catScore = 0;
+                
+                cat.parameters.forEach(p => {
+                    const pScore = parseFloat(document.getElementById(`ev-sc-${cat.id}-${p.id}`).value) || 0;
+                    const pVal = document.getElementById(`ev-val-${cat.id}-${p.id}`).value;
+                    evalData[cat.id].parameters[p.id] = { score: pScore, value: pVal };
+                    catScore += (pScore * p.weight);
+                });
+                evalData[cat.id].score = catScore;
+                total_cinema_score += (catScore * cat.weight);
+            });
+
+            const data = {
+                name: name, province: document.getElementById('ev-prov').value, city: document.getElementById('ev-city').value, address: document.getElementById('ev-address').value,
+                halls: parseInt(document.getElementById('ev-halls').value), total_seats: parseInt(document.getElementById('ev-total').value),
+                nominal_capacity: parseInt(document.getElementById('ev-nom').value), operational_seats: parseInt(document.getElementById('ev-op').value),
+                daily_shows: parseInt(document.getElementById('ev-shows').value), evaluation_data: evalData, total_score: total_cinema_score.toFixed(2)
+            };
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/cinemas`, { method: 'POST', headers, body: JSON.stringify(data) });
+                if(res.ok) { alert("ارزیابی با موفقیت در دیتابیس ثبت شد!"); await fetchAllData(); document.querySelector('[data-target="dashboard"]').click(); }
+                else alert("خطا در ثبت اطلاعات در دیتابیس.");
+            } catch (err) { alert("خطای ارتباط با سرور"); }
+        }
+
+        // ==========================================
+        // 6. SCHEMA EDITOR (SETTINGS)
+        // ==========================================
+        function renderSchemaEditor() {
+            let html = '';
+            APP_STATE.schema.forEach((cat, cIdx) => {
+                let paramsHtml = '';
+                cat.parameters.forEach((p, pIdx) => {
+                    paramsHtml += `
+                    <div class="flex gap-3 mb-3 items-center pl-10">
+                        <i class="bi bi-arrow-return-left text-slate-300 text-xl"></i>
+                        <input type="text" value="${p.name}" onchange="upSchema(${cIdx}, ${pIdx}, 'name', this.value)" class="flex-[4] text-sm font-bold bg-white shadow-sm border-none">
+                        <div class="flex-[1] relative"><span class="absolute right-3 top-3 text-xs text-slate-400">وزن:</span><input type="number" step="0.05" value="${p.weight}" onchange="upSchema(${cIdx}, ${pIdx}, 'weight', parseFloat(this.value))" class="w-full text-center font-black text-brand-600 bg-white border-none shadow-sm pl-2 pr-10"></div>
+                        <button onclick="rmParam(${cIdx}, ${pIdx})" class="w-12 h-12 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors flex justify-center items-center"><i class="bi bi-trash-fill"></i></button>
+                    </div>`;
+                });
+                
+                html += `
+                <div class="bg-slate-50 border border-slate-100 rounded-[32px] p-8 relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-slate-200 group-hover:bg-brand-400 transition-colors"></div>
+                    <div class="flex gap-4 mb-6 items-center bg-white p-4 rounded-[24px] shadow-sm">
+                        <div class="w-12 h-12 rounded-[16px] bg-navy text-white flex justify-center items-center font-black text-lg">${cIdx+1}</div>
+                        <div class="flex-[4]"><label class="block text-xs font-bold text-slate-400 mb-1 pl-2">نام شاخص اصلی</label><input type="text" value="${cat.name}" onchange="upSchema(${cIdx}, null, 'name', this.value)" class="w-full font-black text-lg border-none bg-slate-50"></div>
+                        <div class="flex-[1]"><label class="block text-xs font-bold text-slate-400 mb-1 text-center">وزن کل محور</label><input type="number" step="0.05" value="${cat.weight}" onchange="upSchema(${cIdx}, null, 'weight', parseFloat(this.value))" class="w-full text-center font-black text-xl text-brand-600 bg-brand-50 border-none"></div>
+                        <div class="flex-[1] flex gap-2 justify-end mt-5">
+                            <button onclick="addParam(${cIdx})" title="افزودن پارامتر زیرمجموعه" class="w-12 h-12 rounded-[16px] bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center"><i class="bi bi-plus-lg text-xl"></i></button>
+                            <button onclick="rmCat(${cIdx})" title="حذف کامل شاخص" class="w-12 h-12 rounded-[16px] bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"><i class="bi bi-trash-fill text-xl"></i></button>
+                        </div>
+                    </div>
+                    <div class="space-y-2">${paramsHtml}</div>
+                </div>`;
+            });
+            document.getElementById('schema-editor-container').innerHTML = html;
+        }
+
+        const genId = pre => pre + '_' + Math.random().toString(36).substr(2, 6);
+        const upSchema = (c, p, k, v) => p === null ? APP_STATE.schema[c][k] = v : APP_STATE.schema[c].parameters[p][k] = v;
+        const addParam = c => { APP_STATE.schema[c].parameters.push({ id: genId('p'), name: "پارامتر جدید", weight: 0.1 }); renderSchemaEditor(); }
+        const rmParam = (c, p) => { APP_STATE.schema[c].parameters.splice(p, 1); renderSchemaEditor(); }
+        const addCategory = () => { APP_STATE.schema.push({ id: genId('cat'), name: "شاخص اصلی جدید", weight: 0.1, parameters: [] }); renderSchemaEditor(); }
+        const rmCat = c => { APP_STATE.schema.splice(c, 1); renderSchemaEditor(); }
+
+        async function saveSchemaToDB() {
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/app_config?key=eq.evaluation_schema`, { method: 'PATCH', headers, body: JSON.stringify({ value: APP_STATE.schema }) });
+                if(res.ok) alert("ساختار با موفقیت در دیتابیس بروزرسانی شد."); else alert("خطا در ذخیره سازی!");
+            } catch (err) { alert("خطای ارتباط!"); }
+        }
+
+        // ==========================================
+        // 7. BACKUP SYSTEM
+        // ==========================================
+        function downloadBackup() {
+            const pwd = document.getElementById('backup-pwd').value;
+            const msg = document.getElementById('backup-msg');
+            msg.classList.remove('hidden');
+            if(pwd !== "Ma9184364191") { msg.innerText = "❌ رمز عبور اشتباه است. دسترسی غیرمجاز."; msg.className = "text-sm font-bold text-red-500"; return; }
+            
+            msg.innerText = "✅ احراز هویت موفق. در حال تولید فایل خروجی..."; msg.className = "text-sm font-bold text-brand-600";
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(APP_STATE, null, 2));
+            const a = document.createElement('a'); a.href = dataStr; a.download = "BahmanSabz_FullBackup.json"; a.click();
+            setTimeout(() => { document.getElementById('backup-pwd').value = ''; msg.classList.add('hidden'); }, 3000);
+        }
+    </script>
+</body>
+</html>
