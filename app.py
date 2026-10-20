@@ -12,12 +12,14 @@ st.set_page_config(page_title="داشبورد راهبری سینماها (به�
 st.markdown("""
 <style>
     @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
-    
+
     html, body, [class*="css"], div, h1, h2, h3, h4, h5, h6, p, span, label {
         font-family: 'Vazirmatn', sans-serif !important;
         direction: rtl;
         text-align: right;
+        color: #1e293b !important;
     }
+
     
     /* Background and Layout */
     .stApp { background-color: #f4f7f6; }
