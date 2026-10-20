@@ -56,7 +56,7 @@
         @keyframes slideOut { to { opacity: 0; transform: translateX(-50px); } }
     </style>
 </head>
-<body class="flex h-screen text-slate-800">
+<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form id="auth-form" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-5"><h1 class="text-2xl font-black text-center">ورود مدیران بهمن سبز</h1><label>ایمیل<input id="auth-email" type="email" autocomplete="username" required></label><label>رمز عبور<input id="auth-password" type="password" autocomplete="current-password" required></label><p id="auth-error" class="text-red-600 text-sm" role="alert"></p><button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">ورود</button></form></div>
 
     <aside class="w-72 bg-navy-900 text-slate-300 flex flex-col h-full shadow-2xl z-20">
         <div class="h-28 flex items-center justify-center border-b border-slate-800">
@@ -235,7 +235,7 @@
         </div>
     </main>
 
-    <div id="toast-container"></div>
+    <button id="logout-admin" class="hidden fixed top-3 left-3 z-50 bg-red-600 text-white rounded-xl px-4 py-2" onclick="logoutAdmin()">خروج</button><div id="toast-container"></div>
 
     <script>
         // === 1. تنظیمات و اتصال ===
@@ -244,6 +244,7 @@
         const SUPABASE_KEY = "sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u"; 
         
         let supabase;
+        let activeAdmin = null;
         let STATE = { cinemas: [], schema: [], charts: {} };
 
         // سیستم Toast
@@ -266,9 +267,47 @@
                 return;
             }
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            await fetchData();
+            document.getElementById('auth-form').addEventListener('submit', loginAdmin);
+            supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) await authorizeAdmin(session.user);
         });
 
+        function lockDashboard() {
+            activeAdmin = null; STATE.cinemas = []; STATE.schema = [];
+            document.getElementById('auth-gate').classList.remove('hidden');
+            document.getElementById('logout-admin').classList.add('hidden');
+        }
+        async function authorizeAdmin(user) {
+            if (!user) return;
+            const { data, error } = await supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            if (error || !data) {
+                document.getElementById('auth-error').textContent = 'این حساب مجوز مدیریت ندارد.';
+                await supabase.auth.signOut(); return;
+            }
+            activeAdmin = user.id;
+            document.getElementById('auth-gate').classList.add('hidden');
+            document.getElementById('logout-admin').classList.remove('hidden');
+            await fetchData();
+        }
+        async function loginAdmin(event) {
+            event.preventDefault();
+            const btn = document.getElementById('auth-submit');
+            btn.disabled = true;
+            document.getElementById('auth-error').textContent = '';
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: document.getElementById('auth-email').value.trim(),
+                    password: document.getElementById('auth-password').value
+                });
+                if (error) throw error;
+                document.getElementById('auth-password').value = '';
+                await authorizeAdmin(data.user);
+            } catch (error) {
+                document.getElementById('auth-error').textContent = 'ورود ناموفق بود. اطلاعات حساب را بررسی کنید.';
+            } finally { btn.disabled = false; }
+        }
+        async function logoutAdmin() { await supabase.auth.signOut(); lockDashboard(); }
         function initNavigation() {
             const items = document.querySelectorAll('.nav-item');
             const views = document.querySelectorAll('.view-section');
@@ -302,7 +341,7 @@
         }
 
         // === 3. دریافت داده‌ها از دیتابیس ===
-        async function fetchData() {
+        async function fetchData() { if (!activeAdmin) return;
             try {
                 // 1. واکشی ساختار ارزیابی (Schema)
                 const { data: cfg, error: errC } = await supabase.from('app_config').select('*').eq('key', 'evaluation_schema');
@@ -377,7 +416,7 @@
         function fillProfSelector() {
             const sel = document.getElementById('prof-selector');
             sel.innerHTML = '<option value="">-- یک سینما را انتخاب کنید --</option>';
-            STATE.cinemas.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            STATE.cinemas.forEach(c => { const o=document.createElement("option"); o.value=String(c.id); o.textContent=c.name; sel.appendChild(o); });
             sel.onchange = (e) => e.target.value ? renderProf(parseInt(e.target.value)) : document.getElementById('prof-content').classList.add('hidden');
         }
 
@@ -460,7 +499,7 @@
             document.getElementById('eval-form-dynamic').innerHTML = html || '<p class="text-center py-5">ساختاری تعریف نشده است.</p>';
         }
 
-        async function submitEval() {
+        async function submitEval() { if (!activeAdmin) return;
             const name = document.getElementById('ev-name').value;
             if(!name) { showToast("وارد کردن نام سینما الزامی است.", "error"); return; }
 
@@ -535,7 +574,7 @@
         const addCat = () => { STATE.schema.push({ id: genId('cat'), name: "شاخص جدید", weight: 0.1, parameters: [] }); renderSchemaEditor(); }
         const rmC = c => { STATE.schema.splice(c, 1); renderSchemaEditor(); }
 
-        async function saveSchema() {
+        async function saveSchema() { if (!activeAdmin) return;
             try {
                 const { error } = await supabase.from('app_config').upsert({ key: 'evaluation_schema', value: STATE.schema });
                 if (error) throw error;
@@ -546,7 +585,7 @@
 
         // === 8. بک‌آپ امن ===
         function downloadBackup() {
-            if(document.getElementById('backup-pwd').value !== "Ma9184364191") { showToast("رمز عبور اشتباه است.", "error"); return; }
+            if (!activeAdmin) { showToast("ابتدا وارد حساب مدیر شوید.", "error"); return; }
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(STATE, null, 2));
             const dl = document.createElement('a'); dl.href = dataStr; dl.download = "BahmanSabz_Backup.json"; dl.click();
             document.getElementById('backup-pwd').value = ''; showToast("بک‌آپ ایجاد شد.");
