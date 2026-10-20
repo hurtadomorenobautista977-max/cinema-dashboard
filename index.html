@@ -575,7 +575,7 @@
                     <div class="flex gap-3 mb-2 items-center pl-8">
                         <i class="bi bi-arrow-return-left text-slate-300"></i>
                         <input type="text" value="${escapeHtml(p.name)}" onchange="upS(${cIdx}, ${pIdx}, 'name', this.value)" class="flex-[4] text-sm font-bold bg-white shadow-sm border-none">
-                        <div class="flex-[1] relative"><span class="absolute right-3 top-3 text-xs text-slate-400">وزن:</span><input type="number" step="0.05" value="${p.weight}" readonly onclick="openWeightDialog(${cIdx})" title="برای تغییر وزن از پنجره تعیین وزن استفاده کنید" class="pl-2 pr-10 text-center font-black text-brand-600 bg-white shadow-sm border-none"></div>
+                        <div class="flex-[1] text-center min-w-0"><span class="block text-xs text-slate-400">وزن: ${Number(p.weight).toFixed(2)}</span><button type="button" onclick="openWeightDialog(${cIdx})" class="text-xs font-bold text-emerald-700 hover:underline">تعیین وزن پارامترها</button></div>
                         <button onclick="rmP(${cIdx}, ${pIdx})" class="w-12 h-12 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"><i class="bi bi-trash"></i></button>
                     </div>`;
                 });
@@ -584,7 +584,7 @@
                 <div class="bg-white border border-slate-100 shadow-sm rounded-[24px] p-6">
                     <div class="flex gap-4 mb-4 items-center bg-slate-50 p-4 rounded-2xl">
                         <div class="flex-[4]"><label class="block text-xs font-bold text-slate-400 mb-1 pl-2">نام شاخص اصلی</label><input type="text" value="${escapeHtml(cat.name)}" onchange="upS(${cIdx}, null, 'name', this.value)" class="font-black text-lg border-none bg-white shadow-sm"></div>
-                        <div class="flex-[1]"><label class="block text-xs text-center font-bold text-slate-400 mb-1">وزن کل</label><input type="number" step="0.05" value="${cat.weight}" readonly onclick="openWeightDialog(null)" title="برای تغییر وزن از پنجره تعیین وزن استفاده کنید" class="text-center font-black text-xl text-brand-600 bg-white border-none shadow-sm"></div>
+                        <div class="flex-[1] text-center"><span class="block text-xs text-slate-400 mb-1">وزن شاخص</span><span class="inline-flex bg-white rounded-xl px-4 py-3 text-xl font-black text-emerald-700">${Number(cat.weight).toFixed(2)}</span></div>
                         <div class="flex-[1] flex justify-end gap-2 mt-5">
                             <button onclick="addP(${cIdx})" title="پارامتر جدید" class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"><i class="bi bi-plus-lg"></i></button>
                             <button onclick="rmC(${cIdx})" title="حذف شاخص" class="w-12 h-12 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"><i class="bi bi-trash"></i></button>
@@ -608,16 +608,27 @@
             const entries=cat===null?STATE.schema:STATE.schema[cat]?.parameters;
             if(!entries?.length) { showToast('ابتدا یک مورد اضافه کنید','error'); return; }
             document.getElementById('weight-title').textContent=cat===null?'تعیین وزن شاخص‌های اصلی':'تعیین وزن پارامترهای '+STATE.schema[cat].name;
-            document.getElementById('weight-rows').innerHTML=entries.map((e,i)=>'<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 border rounded-xl p-3"><label class="font-bold text-sm min-w-0">'+escapeHtml(e.name)+'</label><input type="range" min="0" max="1" step="0.01" value="'+e.weight+'" data-weight="'+i+'" oninput="updateWeightTotal()" class="w-full"><input type="number" min="0" max="1" step="0.01" value="'+e.weight+'" data-weight-number="'+i+'" oninput="syncWeightNumber('+i+')" class="w-full border rounded-lg p-2"></div>').join('');
+            document.getElementById('weight-rows').innerHTML=entries.map((e,i)=>'<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 border rounded-xl p-3"><label class="font-bold text-sm min-w-0">'+escapeHtml(e.name)+'</label><input type="range" min="0" max="1" step="0.01" value="'+e.weight+'" data-weight="'+i+'" oninput="syncWeightSlider('+i+')" class="w-full"><input type="number" min="0" max="1" step="0.01" value="'+e.weight+'" data-weight-number="'+i+'" oninput="syncWeightNumber('+i+')" class="w-full border rounded-lg p-2"></div>').join('');
             updateWeightTotal();document.getElementById('weight-dialog').showModal();
         }
+        function syncWeightSlider(i) {
+            const slider=document.querySelector('[data-weight="'+i+'"]');
+            const number=document.querySelector('[data-weight-number="'+i+'"]');
+            if (!slider || !number) return;
+            number.value=Number(slider.value).toFixed(2);
+            updateWeightTotal();
+        }
         function syncWeightNumber(i) {
-            const el=document.querySelector('[data-weight-number="'+i+'"]');
-            const n=Number(el.value); if(!Number.isFinite(n)||n<0||n>1) { updateWeightTotal(); return; }
-            document.querySelector('[data-weight="'+i+'"]').value=n; updateWeightTotal();
+            const number=document.querySelector('[data-weight-number="'+i+'"]');
+            const slider=document.querySelector('[data-weight="'+i+'"]');
+            if (!number || !slider) return;
+            const n=Number(number.value);
+            if(number.value.trim()==='' || !Number.isFinite(n) || n<0 || n>1) { updateWeightTotal(); return; }
+            slider.value=n;
+            updateWeightTotal();
         }
         function updateWeightTotal() {
-            const values=[...document.querySelectorAll('[data-weight-number]')].map(e=>Number(e.value));
+            const values=[...document.querySelectorAll('[data-weight-number]')].map(e=>e.value.trim()===''?NaN:Number(e.value));
             const total=values.reduce((a,b)=>a+b,0);
             const valid=values.every(v=>Number.isFinite(v)&&v>=0&&v<=1)&&Math.abs(total-1)<0.001;
             document.getElementById('weight-total').textContent='مجموع وزن‌ها: '+total.toFixed(2)+' از ۱.۰۰'+(valid?' ✓':' — برای اعمال باید دقیقاً ۱ شود');
@@ -627,7 +638,7 @@
         }
         function applyWeights() {
             const entries=weightCategory===null?STATE.schema:STATE.schema[weightCategory].parameters;
-            const vals=[...document.querySelectorAll('[data-weight-number]')].map(e=>Number(e.value));
+            const vals=[...document.querySelectorAll('[data-weight-number]')].map(e=>e.value.trim()===''?NaN:Number(e.value));
             if(vals.length!==entries.length||vals.some(v=>!Number.isFinite(v)||v<0||v>1)||Math.abs(vals.reduce((a,b)=>a+b,0)-1)>0.001) return;
             entries.forEach((e,i)=>e.weight=vals[i]);
             document.getElementById('weight-dialog').close();renderSchemaEditor();
