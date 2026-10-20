@@ -739,15 +739,43 @@
 
         async function changeDashboardPassword(event) {
             event.preventDefault();
+            const form=event.currentTarget;
+            const submit=form.querySelector('button[type="submit"]');
             const password=document.getElementById('new-user-password').value;
             const confirmPassword=document.getElementById('new-user-password-confirm').value;
             const status=document.getElementById('new-password-status');
-            if(password.length<12 || password!==confirmPassword) {status.className='text-red-600 text-sm font-bold';status.textContent='رمز حداقل ۱۲ نویسه داشته باشد و تکرار آن یکسان باشد.';return;}
-            const {error}=await dbClient.auth.updateUser({password});
-            if(error){status.className='text-red-600 text-sm font-bold';status.textContent='خطا در ذخیره رمز: '+error.message;return;}
-            document.getElementById('new-user-password').value='';
-            document.getElementById('new-user-password-confirm').value='';
-            status.className='text-emerald-700 text-sm font-bold';status.textContent='رمز جدید ذخیره شد.';
+            if(password.length<12 || password!==confirmPassword) {
+                status.className='text-red-600 text-sm font-bold';
+                status.textContent='رمز حداقل ۱۲ نویسه داشته باشد و تکرار آن یکسان باشد.';
+                return;
+            }
+            submit.disabled=true;
+            submit.textContent='در حال ذخیره...';
+            try {
+                const {data,error}=await dbClient.auth.updateUser({password});
+                if(error) throw error;
+                document.getElementById('new-user-password').value='';
+                document.getElementById('new-user-password-confirm').value='';
+                status.textContent='';
+                document.getElementById('password-dialog').close();
+                if(window.location.hash || window.location.search) {
+                    window.history.replaceState(null,'',window.location.pathname);
+                }
+                // The invitation/recovery link signs the user in first; keep that session active.
+                if(!activeAdmin && data?.user) await authorizeAdmin(data.user);
+                if(activeAdmin) {
+                    document.querySelector('[data-target="dashboard"]').click();
+                    showToast('رمز عبور با موفقیت ذخیره شد. خوش آمدید!');
+                } else {
+                    showToast('رمز ذخیره شد؛ برای مشاهده داشبورد وارد حساب شوید.');
+                }
+            } catch(error) {
+                status.className='text-red-600 text-sm font-bold';
+                status.textContent='خطا در ذخیره رمز: '+(error?.message||'لطفاً دوباره تلاش کنید.');
+            } finally {
+                submit.disabled=false;
+                submit.textContent='ذخیره رمز';
+            }
         }
         const userManagerEndpoint = SUPABASE_URL + '/functions/v1/manage-dashboard-users';
         async function callUserManager(payload) {
