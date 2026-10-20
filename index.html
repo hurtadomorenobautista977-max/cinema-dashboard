@@ -89,6 +89,11 @@
                 <i class="bi bi-cloud-arrow-down-fill text-xl text-slate-400"></i> خروجی امن داده‌ها
             </a>
         </nav>
+            <div class="mt-auto px-5 py-5 border-t border-slate-700/70">
+            <button id="logout-admin" type="button" class="hidden w-full items-center justify-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3.5 font-bold text-red-200 transition-colors hover:bg-red-500/20 hover:text-white" onclick="logoutAdmin()">
+                <i class="bi bi-box-arrow-right text-lg"></i><span>خروج از حساب</span>
+            </button>
+        </div>
     </aside>
 
     <main class="flex-1 flex flex-col h-full relative overflow-hidden">
@@ -237,7 +242,7 @@
         </div>
     </main>
 
-    <button id="logout-admin" class="hidden fixed top-3 left-3 z-50 bg-red-600 text-white rounded-xl px-4 py-2" onclick="logoutAdmin()">خروج</button><div id="toast-container"></div>
+    <div id="toast-container"></div>
 
     <script>
         // === 1. تنظیمات و اتصال ===
@@ -280,6 +285,7 @@
             activeAdmin = null; STATE.cinemas = []; STATE.schema = [];
             document.getElementById('auth-gate').classList.remove('hidden');
             document.getElementById('logout-admin').classList.add('hidden');
+            document.getElementById('logout-admin').classList.remove('flex');
         }
         async function authorizeAdmin(user) {
             if (!user) return;
@@ -291,6 +297,7 @@
             activeAdmin = user.id;
             document.getElementById('auth-gate').classList.add('hidden');
             document.getElementById('logout-admin').classList.remove('hidden');
+            document.getElementById('logout-admin').classList.add('flex');
             await fetchData();
         }
         async function loginAdmin(event) {
