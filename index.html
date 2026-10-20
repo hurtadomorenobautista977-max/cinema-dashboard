@@ -56,7 +56,7 @@
         @keyframes slideOut { to { opacity: 0; transform: translateX(-50px); } }
     </style>
 </head>
-<body class="flex h-screen text-slate-800">
+<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form id="auth-form" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-5"><h1 class="text-2xl font-black text-center">ورود مدیران بهمن سبز</h1><label>ایمیل<input id="auth-email" type="email" autocomplete="username" required></label><label>رمز عبور<input id="auth-password" type="password" autocomplete="current-password" required></label><p id="auth-error" class="text-red-600 text-sm" role="alert"></p><button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">ورود</button></form></div>
 
     <aside class="w-72 bg-navy-900 text-slate-300 flex flex-col h-full shadow-2xl z-20">
         <div class="h-28 flex items-center justify-center border-b border-slate-800">
@@ -223,9 +223,9 @@
                 <div class="bg-white rounded-[32px] p-12 shadow-sm border border-slate-100 text-center max-w-xl mx-auto mt-10">
                     <div class="w-24 h-24 bg-slate-50 rounded-[24px] flex items-center justify-center text-4xl text-slate-300 mx-auto mb-8"><i class="bi bi-shield-lock-fill"></i></div>
                     <h3 class="font-black text-xl mb-2">دریافت فایل پشتیبان (JSON)</h3>
-                    <p class="text-sm text-slate-500 mb-8 font-bold">جهت حفظ امنیت، رمز عبور مدیر سیستم را وارد نمایید.</p>
+                    <p class="text-sm text-slate-500 mb-8 font-bold">فایل پشتیبان تنها پس از ورود مدیر قابل دریافت است.</p>
                     
-                    <input type="password" id="backup-pwd" placeholder="رمز عبور..." class="text-center font-bold text-lg mb-4">
+                    
                     <button onclick="downloadBackup()" class="w-full bg-navy-900 text-white py-4 rounded-full font-black shadow-lg hover:-translate-y-1 transition-all">
                         <i class="bi bi-download ml-2"></i> دانلود بک‌آپ
                     </button>
@@ -235,7 +235,7 @@
         </div>
     </main>
 
-    <div id="toast-container"></div>
+    <button id="logout-admin" class="hidden fixed top-3 left-3 z-50 bg-red-600 text-white rounded-xl px-4 py-2" onclick="logoutAdmin()">خروج</button><div id="toast-container"></div>
 
     <script>
         // === 1. تنظیمات و اتصال ===
@@ -244,6 +244,7 @@
         const SUPABASE_KEY = "sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u"; 
         
         let supabase;
+        let activeAdmin = null;
         let STATE = { cinemas: [], schema: [], charts: {} };
 
         // سیستم Toast
@@ -266,9 +267,48 @@
                 return;
             }
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            await fetchData();
+            document.getElementById('auth-form').addEventListener('submit', loginAdmin);
+            supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) await authorizeAdmin(session.user);
         });
 
+        function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x])); }
+        function lockDashboard() {
+            activeAdmin = null; STATE.cinemas = []; STATE.schema = [];
+            document.getElementById('auth-gate').classList.remove('hidden');
+            document.getElementById('logout-admin').classList.add('hidden');
+        }
+        async function authorizeAdmin(user) {
+            if (!user) return;
+            const { data, error } = await supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            if (error || !data) {
+                document.getElementById('auth-error').textContent = 'این حساب مجوز مدیریت ندارد.';
+                await supabase.auth.signOut(); return;
+            }
+            activeAdmin = user.id;
+            document.getElementById('auth-gate').classList.add('hidden');
+            document.getElementById('logout-admin').classList.remove('hidden');
+            await fetchData();
+        }
+        async function loginAdmin(event) {
+            event.preventDefault();
+            const btn = document.getElementById('auth-submit');
+            btn.disabled = true;
+            document.getElementById('auth-error').textContent = '';
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: document.getElementById('auth-email').value.trim(),
+                    password: document.getElementById('auth-password').value
+                });
+                if (error) throw error;
+                document.getElementById('auth-password').value = '';
+                await authorizeAdmin(data.user);
+            } catch (error) {
+                document.getElementById('auth-error').textContent = 'ورود ناموفق بود. اطلاعات حساب را بررسی کنید.';
+            } finally { btn.disabled = false; }
+        }
+        async function logoutAdmin() { await supabase.auth.signOut(); lockDashboard(); }
         function initNavigation() {
             const items = document.querySelectorAll('.nav-item');
             const views = document.querySelectorAll('.view-section');
@@ -302,7 +342,7 @@
         }
 
         // === 3. دریافت داده‌ها از دیتابیس ===
-        async function fetchData() {
+        async function fetchData() { if (!activeAdmin) return;
             try {
                 // 1. واکشی ساختار ارزیابی (Schema)
                 const { data: cfg, error: errC } = await supabase.from('app_config').select('*').eq('key', 'evaluation_schema');
@@ -330,6 +370,7 @@
         function renderDash() {
             const list = STATE.cinemas;
             if(list.length === 0) {
+                for (const id of ['kpi-count','kpi-seats','kpi-score','kpi-eff']) { const el=document.getElementById(id); if(el) el.textContent='0'; }
                 document.getElementById('cinema-list').innerHTML = `<div class="p-8 text-center text-slate-400 font-bold bg-slate-50 rounded-2xl">هیچ سینمایی یافت نشد.</div>`;
                 return;
             }
@@ -352,7 +393,7 @@
                 html += `
                 <div class="bg-white border border-slate-100 rounded-[20px] p-5 flex items-center hover:shadow-md transition-all cursor-pointer" onclick="goProf(${c.id})">
                     <div class="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 ml-4"><i class="bi bi-camera-video"></i></div>
-                    <div class="flex-[2]"><h4 class="font-black text-lg">${c.name}</h4><p class="text-xs font-bold text-slate-400 mt-1">${c.province} - ${c.city}</p></div>
+                    <div class="flex-[2]"><h4 class="font-black text-lg">${escapeHtml(c.name)}</h4><p class="text-xs font-bold text-slate-400 mt-1">${escapeHtml(c.province)} - ${escapeHtml(c.city)}</p></div>
                     <div class="flex-[1] text-center"><p class="text-xs text-slate-400 font-bold mb-1">صندلی فعال</p><span class="font-black">${op}</span></div>
                     <div class="flex-[1] text-left"><span class="px-4 py-1.5 rounded-full font-black text-sm ${bColor}">${score.toFixed(2)}</span></div>
                 </div>`;
@@ -377,7 +418,7 @@
         function fillProfSelector() {
             const sel = document.getElementById('prof-selector');
             sel.innerHTML = '<option value="">-- یک سینما را انتخاب کنید --</option>';
-            STATE.cinemas.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            STATE.cinemas.forEach(c => { const o=document.createElement("option"); o.value=String(c.id); o.textContent=c.name; sel.appendChild(o); });
             sel.onchange = (e) => e.target.value ? renderProf(parseInt(e.target.value)) : document.getElementById('prof-content').classList.add('hidden');
         }
 
@@ -413,7 +454,7 @@
                     const pData = cData.parameters[p.id] || { score: 0, value: '' };
                     pHtml += `
                     <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 rounded-lg transition-colors">
-                        <div class="flex-[2]"><p class="font-bold text-sm text-slate-700">${p.name}</p><span class="text-xs text-slate-400">وزن: ${p.weight}</span></div>
+                        <div class="flex-[2]"><p class="font-bold text-sm text-slate-700">${escapeHtml(p.name)}</p><span class="text-xs text-slate-400">وزن: ${p.weight}</span></div>
                         <div class="flex-[3] text-sm text-slate-500 bg-white border border-slate-100 px-3 py-1.5 rounded-lg mx-3">${pData.value || '---'}</div>
                         <div class="flex-[1] text-left"><span class="font-black bg-brand-50 text-brand-600 px-3 py-1 rounded-full">${pData.score}</span></div>
                     </div>`;
@@ -422,7 +463,7 @@
                 html += `
                 <div class="mb-4 bg-white border border-slate-200 rounded-[20px] overflow-hidden">
                     <div class="bg-slate-50 px-5 py-3 flex justify-between items-center border-b border-slate-200">
-                        <h4 class="font-black text-slate-700"><span class="w-6 h-6 inline-flex justify-center items-center rounded-full bg-brand-500 text-white text-xs ml-2">${i+1}</span>${cat.name}</h4>
+                        <h4 class="font-black text-slate-700"><span class="w-6 h-6 inline-flex justify-center items-center rounded-full bg-brand-500 text-white text-xs ml-2">${i+1}</span>${escapeHtml(cat.name)}</h4>
                         <span class="font-black text-sm bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">امتیاز شاخص: ${cData.score.toFixed(2)}</span>
                     </div>
                     <div class="p-2">${pHtml}</div>
@@ -446,26 +487,29 @@
                 cat.parameters.forEach(p => {
                     pHtml += `
                     <div class="flex gap-4 items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-brand-300 transition-colors">
-                        <div class="flex-[2]"><p class="font-bold text-sm">${p.name}</p></div>
+                        <div class="flex-[2]"><p class="font-bold text-sm">${escapeHtml(p.name)}</p></div>
                         <div class="flex-[1]"><input type="number" min="0" max="5" step="0.5" value="3" id="ev_sc_${cat.id}_${p.id}" class="text-center font-black text-brand-600" title="امتیاز"></div>
                         <div class="flex-[3]"><input type="text" id="ev_val_${cat.id}_${p.id}" placeholder="یادداشت، ویژگی یا مقدار عددی..." class="text-sm"></div>
                     </div>`;
                 });
                 html += `
                 <div class="bg-slate-50 rounded-[24px] p-6 mb-6 border border-slate-100">
-                    <h4 class="font-black text-lg mb-4 flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-brand-500">${cIdx+1}</div> ${cat.name}</h4>
+                    <h4 class="font-black text-lg mb-4 flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-brand-500">${cIdx+1}</div> ${escapeHtml(cat.name)}</h4>
                     <div class="space-y-3">${pHtml}</div>
                 </div>`;
             });
             document.getElementById('eval-form-dynamic').innerHTML = html || '<p class="text-center py-5">ساختاری تعریف نشده است.</p>';
         }
 
-        async function submitEval() {
-            const name = document.getElementById('ev-name').value;
+        async function submitEval() { if (!activeAdmin) return;
+            const name = document.getElementById('ev-name').value.trim();
             if(!name) { showToast("وارد کردن نام سینما الزامی است.", "error"); return; }
 
             let total_score = 0;
             let evData = {};
+            for (const cat of STATE.schema) for (const p of cat.parameters) { const input = document.getElementById('ev_sc_' + cat.id + '_' + p.id); const score = Number(input?.value); if (!input || !input.value.trim() || !Number.isFinite(score) || score < 0 || score > 5) { showToast('امتیاز باید بین صفر و پنج باشد.', 'error'); return; } }
+            for (const id of ['ev-halls','ev-total','ev-op','ev-nom','ev-shows']) { const v = document.getElementById(id).value; if (!v.trim() || !Number.isInteger(Number(v)) || Number(v) < 0) { showToast('مقادیر ظرفیت و تعداد باید عدد صحیح نامنفی باشند.', 'error'); return; } }
+            if (Number(document.getElementById('ev-op').value) > Number(document.getElementById('ev-total').value)) { showToast('صندلی عملیاتی از ظرفیت کل بیشتر است.', 'error'); return; }
 
             STATE.schema.forEach(cat => {
                 evData[cat.id] = { score: 0, parameters: {} };
@@ -482,8 +526,8 @@
 
             const data = {
                 name: name, province: document.getElementById('ev-prov').value || 'نامشخص', city: document.getElementById('ev-city').value || 'نامشخص', address: document.getElementById('ev-address').value,
-                halls: parseInt(document.getElementById('ev-halls').value)||1, total_seats: parseInt(document.getElementById('ev-total').value)||100, operational_seats: parseInt(document.getElementById('ev-op').value)||100,
-                nominal_capacity: parseInt(document.getElementById('ev-nom').value)||100, daily_shows: parseInt(document.getElementById('ev-shows').value)||10, hall_seats_detail: document.getElementById('ev-details').value,
+                halls: Number(document.getElementById('ev-halls').value), total_seats: Number(document.getElementById('ev-total').value), operational_seats: Number(document.getElementById('ev-op').value),
+                nominal_capacity: Number(document.getElementById('ev-nom').value), daily_shows: Number(document.getElementById('ev-shows').value), hall_seats_detail: document.getElementById('ev-details').value,
                 evaluation_data: evData, total_score: total_score.toFixed(2)
             };
 
@@ -507,7 +551,7 @@
                     pHtml += `
                     <div class="flex gap-3 mb-2 items-center pl-8">
                         <i class="bi bi-arrow-return-left text-slate-300"></i>
-                        <input type="text" value="${p.name}" onchange="upS(${cIdx}, ${pIdx}, 'name', this.value)" class="flex-[4] text-sm font-bold bg-white shadow-sm border-none">
+                        <input type="text" value="${escapeHtml(p.name)}" onchange="upS(${cIdx}, ${pIdx}, 'name', this.value)" class="flex-[4] text-sm font-bold bg-white shadow-sm border-none">
                         <div class="flex-[1] relative"><span class="absolute right-3 top-3 text-xs text-slate-400">وزن:</span><input type="number" step="0.05" value="${p.weight}" onchange="upS(${cIdx}, ${pIdx}, 'weight', parseFloat(this.value))" class="pl-2 pr-10 text-center font-black text-brand-600 bg-white shadow-sm border-none"></div>
                         <button onclick="rmP(${cIdx}, ${pIdx})" class="w-12 h-12 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"><i class="bi bi-trash"></i></button>
                     </div>`;
@@ -516,7 +560,7 @@
                 html += `
                 <div class="bg-white border border-slate-100 shadow-sm rounded-[24px] p-6">
                     <div class="flex gap-4 mb-4 items-center bg-slate-50 p-4 rounded-2xl">
-                        <div class="flex-[4]"><label class="block text-xs font-bold text-slate-400 mb-1 pl-2">نام شاخص اصلی</label><input type="text" value="${cat.name}" onchange="upS(${cIdx}, null, 'name', this.value)" class="font-black text-lg border-none bg-white shadow-sm"></div>
+                        <div class="flex-[4]"><label class="block text-xs font-bold text-slate-400 mb-1 pl-2">نام شاخص اصلی</label><input type="text" value="${escapeHtml(cat.name)}" onchange="upS(${cIdx}, null, 'name', this.value)" class="font-black text-lg border-none bg-white shadow-sm"></div>
                         <div class="flex-[1]"><label class="block text-xs text-center font-bold text-slate-400 mb-1">وزن کل</label><input type="number" step="0.05" value="${cat.weight}" onchange="upS(${cIdx}, null, 'weight', parseFloat(this.value))" class="text-center font-black text-xl text-brand-600 bg-white border-none shadow-sm"></div>
                         <div class="flex-[1] flex justify-end gap-2 mt-5">
                             <button onclick="addP(${cIdx})" title="پارامتر جدید" class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"><i class="bi bi-plus-lg"></i></button>
@@ -535,7 +579,10 @@
         const addCat = () => { STATE.schema.push({ id: genId('cat'), name: "شاخص جدید", weight: 0.1, parameters: [] }); renderSchemaEditor(); }
         const rmC = c => { STATE.schema.splice(c, 1); renderSchemaEditor(); }
 
-        async function saveSchema() {
+        async function saveSchema() { if (!activeAdmin) return;
+            const validWeight = n => Number.isFinite(n) && n >= 0 && n <= 1;
+            const sumOne = n => Math.abs(n - 1) < 0.001;
+            if (!STATE.schema.length || STATE.schema.some(c => !c.name?.trim() || !validWeight(c.weight) || !c.parameters?.length || c.parameters.some(p => !p.name?.trim() || !validWeight(p.weight)) || !sumOne(c.parameters.reduce((a,p) => a + p.weight, 0))) || !sumOne(STATE.schema.reduce((a,c) => a + c.weight, 0))) { showToast('مجموع وزن‌ها در هر سطح باید یک باشد و نام‌ها خالی نباشند.', 'error'); return; }
             try {
                 const { error } = await supabase.from('app_config').upsert({ key: 'evaluation_schema', value: STATE.schema });
                 if (error) throw error;
@@ -546,10 +593,10 @@
 
         // === 8. بک‌آپ امن ===
         function downloadBackup() {
-            if(document.getElementById('backup-pwd').value !== "Ma9184364191") { showToast("رمز عبور اشتباه است.", "error"); return; }
+            if (!activeAdmin) { showToast("ابتدا وارد حساب مدیر شوید.", "error"); return; }
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(STATE, null, 2));
             const dl = document.createElement('a'); dl.href = dataStr; dl.download = "BahmanSabz_Backup.json"; dl.click();
-            document.getElementById('backup-pwd').value = ''; showToast("بک‌آپ ایجاد شد.");
+            showToast("بک‌آپ ایجاد شد.");
         }
     </script>
 </body>
