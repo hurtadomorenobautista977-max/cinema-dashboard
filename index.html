@@ -376,6 +376,7 @@
             if(list.length === 0) {
                 for (const id of ['kpi-count','kpi-seats','kpi-score','kpi-eff']) { const el=document.getElementById(id); if(el) el.textContent='0'; }
                 document.getElementById('cinema-list').innerHTML = `<div class="p-8 text-center text-slate-400 font-bold bg-slate-50 rounded-2xl">هیچ سینمایی یافت نشد.</div>`;
+                document.getElementById('score-bands').textContent='داده‌ای موجود نیست.'; if(STATE.charts.donut) {STATE.charts.donut.destroy(); STATE.charts.donut=null;}
                 return;
             }
 
@@ -409,6 +410,12 @@
             document.getElementById('kpi-score').innerText = (sumScore/list.length).toFixed(2);
             document.getElementById('kpi-eff').innerText = (sumEff/list.length).toFixed(1) + '%';
 
+            const bands=[0,0,0,0,0];
+            list.forEach(c=>{const v=Number(c.total_score||0);bands[Math.min(4,Math.max(0,Math.floor(v===5?4:v)))]++;});
+            const bandLabels=['۰ تا کمتر از ۱','۱ تا کمتر از ۲','۲ تا کمتر از ۳','۳ تا کمتر از ۴','۴ تا ۵'];
+            document.getElementById('score-bands').innerHTML=bands.map((n,i)=>'<div class="rounded-xl bg-slate-50 p-3">'+bandLabels[i]+'<br><b>'+n+' سینما</b></div>').join('');
+            if(STATE.charts.donut) STATE.charts.donut.destroy();
+            STATE.charts.donut=new Chart(document.getElementById('scoreDonut'),{type:'doughnut',data:{labels:bandLabels,datasets:[{data:bands,backgroundColor:['#ef4444','#f97316','#eab308','#38bdf8','#10b981']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+' سینما'}}}}});
             if(STATE.charts.bar) STATE.charts.bar.destroy();
             const ctx = document.getElementById('barChart').getContext('2d');
             STATE.charts.bar = new Chart(ctx, {
@@ -420,6 +427,9 @@
 
         // === 5. پروفایل سینما ===
         function fillProfSelector() {
+            const cards=document.getElementById('profile-cards');
+            cards.innerHTML=STATE.cinemas.map(c=>'<button onclick="renderProf('+Number(c.id)+')" class="text-right bg-white border rounded-2xl p-5 hover:border-emerald-500 shadow-sm"><h3 class="font-black">'+escapeHtml(c.name)+'</h3><p class="text-slate-500 text-sm">'+escapeHtml(c.city)+' | '+escapeHtml(c.province)+'</p><p class="mt-2 font-bold">امتیاز: '+Number(c.total_score||0).toFixed(2)+' / ۵</p></button>').join('') || '<p>سینمایی برای نمایش وجود ندارد.</p>';
+
             const sel = document.getElementById('prof-selector');
             sel.innerHTML = '<option value="">-- یک سینما را انتخاب کنید --</option>';
             STATE.cinemas.forEach(c => { const o=document.createElement("option"); o.value=String(c.id); o.textContent=c.name; sel.appendChild(o); });
@@ -435,6 +445,11 @@
             const c = STATE.cinemas.find(x => x.id === id);
             if(!c) return;
             document.getElementById('prof-content').classList.remove('hidden');
+            document.getElementById('prof-selector').value=String(id);
+            const op=Number(c.operational_seats||0), total=Number(c.total_seats||0), score=Number(c.total_score||0);
+            const mean=STATE.cinemas.reduce((a,x)=>a+Number(x.total_score||0),0)/(STATE.cinemas.length||1);
+            const rank=1+STATE.cinemas.filter(x=>Number(x.total_score||0)>score).length;
+            document.getElementById('profile-insights').innerHTML='<div class="bg-white rounded-2xl p-5 border"><p class="text-slate-500">بهره‌وری صندلی</p><b class="text-2xl">'+(total?((op/total)*100).toFixed(1)+'٪':'نامشخص')+'</b></div><div class="bg-white rounded-2xl p-5 border"><p class="text-slate-500">رتبه در شبکه</p><b class="text-2xl">'+rank+' از '+STATE.cinemas.length+'</b></div><div class="bg-white rounded-2xl p-5 border"><p class="text-slate-500">اختلاف با میانگین شبکه</p><b class="text-2xl">'+(score-mean>=0?'+':'')+(score-mean).toFixed(2)+'</b></div>';
 
             const tScore = parseFloat(c.total_score || 0);
             document.getElementById('prof-total-score').innerText = tScore.toFixed(2);
@@ -451,7 +466,7 @@
 
             STATE.schema.forEach((cat, i) => {
                 const cData = evData[cat.id] || { score: 0, parameters: {} };
-                radarLabels.push(cat.name); radarScores.push(cData.score);
+                radarLabels.push(cat.name); radarScores.push(Number(cData.score||0));
 
                 let pHtml = '';
                 cat.parameters.forEach(p => {
@@ -459,7 +474,7 @@
                     pHtml += `
                     <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 rounded-lg transition-colors">
                         <div class="flex-[2]"><p class="font-bold text-sm text-slate-700">${escapeHtml(p.name)}</p><span class="text-xs text-slate-400">وزن: ${p.weight}</span></div>
-                        <div class="flex-[3] text-sm text-slate-500 bg-white border border-slate-100 px-3 py-1.5 rounded-lg mx-3">${pData.value || '---'}</div>
+                        <div class="flex-[3] text-sm text-slate-500 bg-white border border-slate-100 px-3 py-1.5 rounded-lg mx-3">${escapeHtml(pData.value || '---')}</div>
                         <div class="flex-[1] text-left"><span class="font-black bg-brand-50 text-brand-600 px-3 py-1 rounded-full">${pData.score}</span></div>
                     </div>`;
                 });
@@ -468,7 +483,7 @@
                 <div class="mb-4 bg-white border border-slate-200 rounded-[20px] overflow-hidden">
                     <div class="bg-slate-50 px-5 py-3 flex justify-between items-center border-b border-slate-200">
                         <h4 class="font-black text-slate-700"><span class="w-6 h-6 inline-flex justify-center items-center rounded-full bg-brand-500 text-white text-xs ml-2">${i+1}</span>${escapeHtml(cat.name)}</h4>
-                        <span class="font-black text-sm bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">امتیاز شاخص: ${cData.score.toFixed(2)}</span>
+                        <span class="font-black text-sm bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">امتیاز شاخص: ${Number(cData.score||0).toFixed(2)}</span>
                     </div>
                     <div class="p-2">${pHtml}</div>
                 </div>`;
