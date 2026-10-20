@@ -99,7 +99,7 @@
                 <i class="bi bi-cloud-arrow-down-fill text-xl text-slate-400"></i> خروجی امن داده‌ها
             </a>
         </nav>
-            <div class="mt-auto px-5 py-5 border-t border-slate-700/70">
+            <div class="mt-auto px-5 py-5 border-t border-slate-700/70"><button type="button" onclick="document.getElementById('password-dialog').showModal()" class="w-full mb-3 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-800"><i class="bi bi-key ml-2"></i> تنظیم / تغییر رمز عبور</button>
             <button id="logout-admin" type="button" class="hidden w-full items-center justify-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3.5 font-bold text-red-200 transition-colors hover:bg-red-500/20 hover:text-white" onclick="logoutAdmin()">
                 <i class="bi bi-box-arrow-right text-lg"></i><span>خروج از حساب</span>
             </button>
@@ -271,6 +271,16 @@
         </div>
     </main>
 
+    <dialog id="password-dialog" class="rounded-3xl p-7 w-[min(92vw,420px)] shadow-2xl backdrop:bg-slate-900/50" dir="rtl">
+        <h3 class="font-black text-xl mb-2">تنظیم رمز عبور</h3>
+        <p class="text-sm text-slate-500 mb-5">اگر با لینک دعوت وارد شده‌اید، اینجا رمز عبور جدیدی تعیین کنید تا دفعات بعد با ایمیل و رمز وارد شوید.</p>
+        <form onsubmit="changeDashboardPassword(event)" class="space-y-3">
+            <label class="block text-sm font-bold">رمز جدید (حداقل ۱۲ نویسه)<input id="new-user-password" type="password" required minlength="12" autocomplete="new-password" class="mt-2"></label>
+            <label class="block text-sm font-bold">تکرار رمز جدید<input id="new-user-password-confirm" type="password" required minlength="12" autocomplete="new-password" class="mt-2"></label>
+            <p id="new-password-status" role="status" class="text-sm font-bold"></p>
+            <div class="flex gap-3"><button type="submit" class="bg-emerald-600 text-white rounded-xl py-3 px-5 font-bold">ذخیره رمز</button><button type="button" onclick="document.getElementById('password-dialog').close()" class="bg-slate-100 rounded-xl py-3 px-5 font-bold">انصراف</button></div>
+        </form>
+    </dialog>
     <div id="toast-container"></div>
 
     <script>
@@ -719,6 +729,18 @@
         }
 
 
+        async function changeDashboardPassword(event) {
+            event.preventDefault();
+            const password=document.getElementById('new-user-password').value;
+            const confirmPassword=document.getElementById('new-user-password-confirm').value;
+            const status=document.getElementById('new-password-status');
+            if(password.length<12 || password!==confirmPassword) {status.className='text-red-600 text-sm font-bold';status.textContent='رمز حداقل ۱۲ نویسه داشته باشد و تکرار آن یکسان باشد.';return;}
+            const {error}=await dbClient.auth.updateUser({password});
+            if(error){status.className='text-red-600 text-sm font-bold';status.textContent='خطا در ذخیره رمز: '+error.message;return;}
+            document.getElementById('new-user-password').value='';
+            document.getElementById('new-user-password-confirm').value='';
+            status.className='text-emerald-700 text-sm font-bold';status.textContent='رمز جدید ذخیره شد.';
+        }
         const userManagerEndpoint = SUPABASE_URL + '/functions/v1/manage-dashboard-users';
         async function callUserManager(payload) {
             if(activeRole!=='owner' || !activeAdmin) throw new Error('مدیریت کاربران فقط در اختیار مالک پنل است.');
