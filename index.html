@@ -29,6 +29,15 @@
         input, textarea, select { max-width:100%; min-width:0; } .view-section, .view-section * { overflow-wrap:anywhere; } details > summary { cursor:pointer; } 
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f8fafc; color: #334155; overflow: hidden; }
         
+        /* Chart presentation */
+        .chart-surface { position: relative; isolation:isolate; background:linear-gradient(145deg,#ffffff 15%,#f6fbfa 100%); border:1px solid #e4efed; border-radius:28px; box-shadow:0 14px 40px -30px rgba(15,23,42,.32); }
+        .chart-surface::before { content:""; pointer-events:none; position:absolute; inset:0; border-radius:inherit; background:radial-gradient(circle at 10% 5%,rgba(16,185,129,.065),transparent 48%); z-index:-1; }
+        .chart-legend-pill { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #e9f0ef; background:rgba(255,255,255,.82); border-radius:15px; padding:12px; font-size:12px; transition:transform .2s,box-shadow .2s; }
+        .chart-legend-pill:hover { transform:translateY(-2px); box-shadow:0 8px 24px -16px #64748b; }
+        .chart-dot { display:inline-block; width:10px; height:10px; flex:none; border-radius:50%; margin-left:6px; box-shadow:0 0 0 4px rgba(148,163,184,.09); }
+        .insight-tile { border-radius:23px; border:1px solid #e6efeb; padding:20px; background:linear-gradient(135deg,#fff,#f5fbf8); box-shadow:0 10px 26px -23px #0f172a; }
+        .insight-number { font-size:clamp(22px,2.3vw,33px); letter-spacing:-.04em; font-weight:900; }
+        @media (prefers-reduced-motion:reduce) { .chart-legend-pill { transition:none; } }
         /* طراحی اسکرول‌بار نرم */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -134,14 +143,14 @@
                         <h3 class="font-black text-xl mb-6">لیست وضعیت سینماها</h3>
                         <div id="cinema-list" class="space-y-4"></div>
                     </div>
-                    <div class="col-span-1 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 flex flex-col">
+                    <div class="col-span-1 chart-surface p-8 flex flex-col">
                         <h3 class="font-black text-xl mb-6">رتبه‌بندی امتیازات</h3>
                         <div class="flex-1 relative w-full h-[300px]">
                             <canvas id="barChart"></canvas>
                         </div>
                     </div>
                 </div>
-                <div class="bg-white rounded-[28px] p-6 mt-7 border border-slate-100"><h3 class="font-black text-lg mb-3">توزیع امتیاز سینماها</h3><div class="max-w-sm mx-auto h-64"><canvas id="scoreDonut"></canvas></div><div id="score-bands" class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 text-center text-sm"></div></div>
+                <div class="chart-surface p-6 mt-7"><h3 class="font-black text-lg mb-3">توزیع امتیاز سینماها</h3><div class="max-w-sm mx-auto h-72"><canvas id="scoreDonut"></canvas></div><div id="score-bands" class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 text-center text-sm"></div></div>
             </div>
 
             <div id="view-profile" class="view-section"><div id="profile-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6"></div>
@@ -149,7 +158,7 @@
                     <div class="flex-1"><select id="prof-selector" class="bg-slate-50 font-black text-lg text-navy-900 border-none"></select></div>
                 </div>
 
-                <div id="prof-content" class="hidden space-y-8"><div id="profile-insights" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div><div id="profile-analysis" class="bg-white rounded-2xl border p-5"></div><div class="bg-white rounded-3xl p-6 border"><h3 class="font-black text-lg mb-4">مقایسه شاخص‌های سینما با میانگین شبکه</h3><div class="relative h-80"><canvas id="profileCompareChart"></canvas></div></div>
+                <div id="prof-content" class="hidden space-y-8"><div id="profile-insights" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div><div id="profile-analysis" class="chart-surface p-5"></div><div class="chart-surface p-6"><h3 class="font-black text-lg mb-4">مقایسه شاخص‌های سینما با میانگین شبکه</h3><div class="relative h-80"><canvas id="profileCompareChart"></canvas></div></div>
                     <div class="flex gap-6">
                         <!-- کارت نمره کلی -->
                         <div class="bg-navy-900 rounded-[32px] p-8 text-white flex-1 relative overflow-hidden flex flex-col justify-center items-center shadow-xl">
@@ -167,7 +176,7 @@
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div class="col-span-1 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
+                        <div class="col-span-1 chart-surface p-8">
                             <h3 class="font-black text-lg text-center mb-6">تعادل شاخص‌ها</h3>
                             <canvas id="radarChart"></canvas>
                         </div>
@@ -419,15 +428,42 @@
             const bands=[0,0,0,0,0];
             list.forEach(c=>{const v=Number(c.total_score||0);bands[Math.min(4,Math.max(0,Math.floor(v===5?4:v)))]++;});
             const bandLabels=['۰ تا کمتر از ۱','۱ تا کمتر از ۲','۲ تا کمتر از ۳','۳ تا کمتر از ۴','۴ تا ۵'];
-            document.getElementById('score-bands').innerHTML=bands.map((n,i)=>'<div class="rounded-xl bg-slate-50 p-3">'+bandLabels[i]+'<br><b>'+n+' سینما</b></div>').join('');
+            const palette=['#ef737d','#f3a663','#f4c85f','#5bafdc','#18b99c'];
+            document.getElementById('score-bands').innerHTML=bands.map((n,i)=>'<div class="chart-legend-pill"><span><i class="chart-dot" style="background:'+palette[i]+'"></i>'+bandLabels[i]+'</span><strong class="text-slate-800">'+n+' سینما</strong></div>').join('');
             if(STATE.charts.donut) STATE.charts.donut.destroy();
-            STATE.charts.donut=new Chart(document.getElementById('scoreDonut'),{type:'doughnut',data:{labels:bandLabels,datasets:[{data:bands,backgroundColor:['#ef4444','#f97316','#eab308','#38bdf8','#10b981']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+' سینما'}}}}});
+            const donutCenter={
+                id:'donutCenter',
+                afterDraw(chart) {
+                    const meta=chart.getDatasetMeta(0);
+                    if (!meta.data?.length) return;
+                    const {x,y}=meta.data[0], ctx=chart.ctx;
+                    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+                    ctx.fillStyle='#0f172a';ctx.font='900 31px Vazirmatn, sans-serif';ctx.fillText(String(list.length),x,y-11);
+                    ctx.fillStyle='#64748b';ctx.font='12px Vazirmatn, sans-serif';ctx.fillText('سینما در شبکه',x,y+20);ctx.restore();
+                }
+            };
+            STATE.charts.donut=new Chart(document.getElementById('scoreDonut'),{
+                type:'doughnut',
+                data:{labels:bandLabels,datasets:[{data:bands,backgroundColor:palette,borderColor:'#fff',borderWidth:5,borderRadius:9,spacing:3,hoverOffset:12}]},
+                plugins:[donutCenter],
+                options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:850,easing:'easeOutQuart'},
+                    plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',padding:14,cornerRadius:13,displayColors:true,rtl:true,titleFont:{family:'Vazirmatn'},bodyFont:{family:'Vazirmatn'},callbacks:{label:ctx=>' '+ctx.raw+' سینما'}}}}
+            });
             if(STATE.charts.bar) STATE.charts.bar.destroy();
-            const ctx = document.getElementById('barChart').getContext('2d');
-            STATE.charts.bar = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: names, datasets: [{ label: 'امتیاز', data: scores, backgroundColor: '#10b981', borderRadius: 8 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 5 } } }
+            const ctx=document.getElementById('barChart').getContext('2d');
+            const barGradient=ctx.createLinearGradient(0,0,0,340);
+            barGradient.addColorStop(0,'#12b886');barGradient.addColorStop(1,'#8de4c7');
+            const valueLabels={id:'barValueLabels',afterDatasetsDraw(chart){
+                const context=chart.ctx;context.save();context.textAlign='center';context.fillStyle='#334155';context.font='bold 12px Vazirmatn, sans-serif';
+                chart.getDatasetMeta(0).data.forEach((point,i)=>{context.fillText(scores[i].toFixed(2),point.x,point.y-10);});context.restore();
+            }};
+            STATE.charts.bar=new Chart(ctx,{
+                type:'bar',data:{labels:names,datasets:[{label:'امتیاز',data:scores,backgroundColor:barGradient,hoverBackgroundColor:'#0d9c74',borderRadius:12,borderSkipped:false,maxBarThickness:34}]},
+                plugins:[valueLabels],
+                options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:26,bottom:8}},animation:{duration:800,easing:'easeOutCubic'},
+                    plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',padding:12,cornerRadius:12,rtl:true,callbacks:{label:ctx=>' امتیاز: '+Number(ctx.raw).toFixed(2)+' از ۵'}}},
+                    scales:{y:{min:0,max:5,grid:{color:'#eaf0f2',drawTicks:false},border:{display:false},ticks:{stepSize:1,color:'#94a3b8',padding:10}},
+                    x:{grid:{display:false},border:{display:false},ticks:{color:'#64748b',font:{family:'Vazirmatn',size:11},maxRotation:35,minRotation:0}}}}
             });
         }
 
