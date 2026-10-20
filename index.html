@@ -12,7 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        tailwind.config = {
+        if (window.tailwind) tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: { sans: ['Vazirmatn', 'sans-serif'] },
@@ -259,7 +259,9 @@
 
         // === 2. راه‌اندازی اولیه ===
         document.addEventListener('DOMContentLoaded', async () => {
-            initNavigation();
+            document.getElementById('auth-form').addEventListener('submit', loginAdmin);
+            try { initNavigation(); } catch (e) { console.error(e); }
+            if (!window.supabase?.createClient) { document.getElementById('auth-error').textContent = 'خطا در بارگذاری اتصال Supabase؛ صفحه را دوباره بارگذاری کنید.'; return; }
             if(SUPABASE_KEY.includes('اینجا')) {
                 document.getElementById('conn-status').className = "px-5 py-2 rounded-full bg-red-50 text-red-600 border border-red-200 text-sm font-bold flex items-center gap-2";
                 document.getElementById('conn-status').innerHTML = '<i class="bi bi-x-circle-fill"></i> کلید وارد نشده';
@@ -267,7 +269,6 @@
                 return;
             }
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            document.getElementById('auth-form').addEventListener('submit', loginAdmin);
             supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
             const { data: { session } } = await supabase.auth.getSession();
             if (session) await authorizeAdmin(session.user);
@@ -294,9 +295,10 @@
         async function loginAdmin(event) {
             event.preventDefault();
             const btn = document.getElementById('auth-submit');
-            btn.disabled = true;
+            btn.disabled = true; btn.textContent = 'در حال ورود...';
             document.getElementById('auth-error').textContent = '';
             try {
+                if (!supabase?.auth) throw new Error('Supabase unavailable');
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email: document.getElementById('auth-email').value.trim(),
                     password: document.getElementById('auth-password').value
@@ -306,7 +308,7 @@
                 await authorizeAdmin(data.user);
             } catch (error) {
                 document.getElementById('auth-error').textContent = 'ورود ناموفق بود. اطلاعات حساب را بررسی کنید.';
-            } finally { btn.disabled = false; }
+            } finally { btn.disabled = false; btn.textContent = 'ورود'; }
         }
         async function logoutAdmin() { await supabase.auth.signOut(); lockDashboard(); }
         function initNavigation() {
