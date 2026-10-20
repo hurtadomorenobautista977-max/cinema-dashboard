@@ -26,6 +26,7 @@
         }
     </script>
     <style>
+        input, textarea, select { max-width:100%; min-width:0; } .view-section, .view-section * { overflow-wrap:anywhere; } details > summary { cursor:pointer; } 
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f8fafc; color: #334155; overflow: hidden; }
         
         /* طراحی اسکرول‌بار نرم */
@@ -123,8 +124,8 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-3 gap-8">
-                    <div class="col-span-2 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
                         <h3 class="font-black text-xl mb-6">لیست وضعیت سینماها</h3>
                         <div id="cinema-list" class="space-y-4"></div>
                     </div>
@@ -135,14 +136,15 @@
                         </div>
                     </div>
                 </div>
+                <div class="bg-white rounded-[28px] p-6 mt-7 border border-slate-100"><h3 class="font-black text-lg mb-3">توزیع امتیاز سینماها</h3><div class="max-w-sm mx-auto h-64"><canvas id="scoreDonut"></canvas></div><div id="score-bands" class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 text-center text-sm"></div></div>
             </div>
 
-            <div id="view-profile" class="view-section">
+            <div id="view-profile" class="view-section"><div id="profile-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6"></div>
                 <div class="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 mb-8 flex gap-6 items-center">
                     <div class="flex-1"><select id="prof-selector" class="bg-slate-50 font-black text-lg text-navy-900 border-none"></select></div>
                 </div>
 
-                <div id="prof-content" class="hidden space-y-8">
+                <div id="prof-content" class="hidden space-y-8"><div id="profile-insights" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
                     <div class="flex gap-6">
                         <!-- کارت نمره کلی -->
                         <div class="bg-navy-900 rounded-[32px] p-8 text-white flex-1 relative overflow-hidden flex flex-col justify-center items-center shadow-xl">
@@ -159,7 +161,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div class="col-span-1 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
                             <h3 class="font-black text-lg text-center mb-6">تعادل شاخص‌ها</h3>
                             <canvas id="radarChart"></canvas>
@@ -169,7 +171,7 @@
                 </div>
             </div>
 
-            <div id="view-evaluate" class="view-section">
+            <div id="view-evaluate" class="view-section"><div id="eval-list-view"><div class="flex items-center justify-between gap-3 flex-wrap mb-6"><h2 class="text-xl font-black">سینماهای ثبت‌شده</h2><button onclick="openNewEvaluation()" class="bg-brand-500 text-white rounded-xl px-6 py-3 font-bold">+ افزودن سینما و ارزیابی</button></div><div id="eval-cinema-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div></div><div id="eval-editor-view" class="hidden"><button onclick="closeEvaluation()" class="mb-5 px-5 py-2 bg-slate-200 rounded-xl font-bold">بازگشت به فهرست</button>
                 <div class="bg-white rounded-[32px] p-10 shadow-sm border border-slate-100 max-w-5xl mx-auto">
                     <h3 class="font-black text-xl mb-6">۱. مشخصات پایه‌ای سینما</h3>
                     <div class="grid grid-cols-3 gap-6 mb-10">
@@ -197,6 +199,7 @@
                 </div>
             </div>
 
+            </div>
             <div id="view-settings" class="view-section">
                 <div class="flex justify-between items-center mb-8">
                     <div>
@@ -213,7 +216,7 @@
                     دقت کنید: مجموع وزن شاخص‌های اصلی باید دقیقاً ۱.۰ باشد. همچنین در هر شاخص، مجموع وزن پارامترهای آن نیز باید ۱.۰ باشد.
                 </div>
 
-                <div id="schema-editor" class="space-y-6"></div>
+                <button onclick="openWeightDialog(null)" class="bg-brand-500 text-white rounded-xl px-6 py-3 font-bold mb-5">تعیین وزن شاخص‌ها</button><div id="schema-editor" class="space-y-6"></div><dialog id="weight-dialog" class="rounded-3xl p-6 w-[min(95vw,680px)] shadow-2xl backdrop:bg-slate-900/50"><h3 id="weight-title" class="font-black text-xl mb-4">تعیین وزن</h3><div id="weight-rows" class="space-y-3 max-h-[55vh] overflow-y-auto"></div><div id="weight-total" class="mt-5 font-black"></div><div class="flex gap-3 mt-5"><button onclick="applyWeights()" id="weight-save" class="bg-brand-500 text-white rounded-xl px-6 py-3">اعمال وزن‌ها</button><button onclick="document.getElementById('weight-dialog').close()" class="bg-slate-200 rounded-xl px-6 py-3">انصراف</button></div></dialog>
                 <button onclick="addCat()" class="mt-8 border-2 border-dashed border-slate-300 text-slate-500 hover:border-brand-500 hover:text-brand-500 w-full py-5 rounded-[24px] font-black transition-all flex justify-center items-center gap-3">
                     <i class="bi bi-plus-lg"></i> افزودن شاخص اصلی جدید
                 </button>
@@ -336,7 +339,7 @@
 
                     if(target === 'dashboard') renderDash();
                     if(target === 'profile') fillProfSelector();
-                    if(target === 'evaluate') renderEvalForm();
+                    if(target === 'evaluate') { closeEvaluation(); renderEvalList(); }
                     if(target === 'settings') renderSchemaEditor();
                 });
             });
@@ -358,7 +361,7 @@
 
                 document.getElementById('conn-status').className = "px-5 py-2 rounded-full bg-brand-50 text-brand-600 border border-brand-200 text-sm font-bold flex items-center gap-2";
                 document.getElementById('conn-status').innerHTML = '<i class="bi bi-check-circle-fill"></i> متصل';
-                renderDash();
+                renderDash(); renderEvalList(); fillProfSelector();
             } catch (err) {
                 console.error(err);
                 document.getElementById('conn-status').className = "px-5 py-2 rounded-full bg-red-50 text-red-600 border border-red-200 text-sm font-bold flex items-center gap-2";
@@ -481,34 +484,23 @@
         }
 
         // === 6. فرم ارزیابی پویا ===
-        function renderEvalForm() {
-            let html = '';
-            STATE.schema.forEach((cat, cIdx) => {
-                let pHtml = '';
-                cat.parameters.forEach(p => {
-                    pHtml += `
-                    <div class="flex gap-4 items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-brand-300 transition-colors">
-                        <div class="flex-[2]"><p class="font-bold text-sm">${escapeHtml(p.name)}</p></div>
-                        <div class="flex-[1]"><input type="number" min="0" max="5" step="0.5" value="3" id="ev_sc_${cat.id}_${p.id}" class="text-center font-black text-brand-600" title="امتیاز"></div>
-                        <div class="flex-[3]"><input type="text" id="ev_val_${cat.id}_${p.id}" placeholder="یادداشت، ویژگی یا مقدار عددی..." class="text-sm"></div>
-                    </div>`;
-                });
-                html += `
-                <div class="bg-slate-50 rounded-[24px] p-6 mb-6 border border-slate-100">
-                    <h4 class="font-black text-lg mb-4 flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-brand-500">${cIdx+1}</div> ${escapeHtml(cat.name)}</h4>
-                    <div class="space-y-3">${pHtml}</div>
-                </div>`;
-            });
-            document.getElementById('eval-form-dynamic').innerHTML = html || '<p class="text-center py-5">ساختاری تعریف نشده است.</p>';
+        function renderEvalList() {
+            const root=document.getElementById('eval-cinema-cards'); if(!root) return;
+            root.innerHTML=STATE.cinemas.map(c=>'<div class="p-5 bg-white border rounded-2xl shadow-sm"><h3 class="font-black text-lg">'+escapeHtml(c.name)+'</h3><p class="text-slate-500 text-sm mt-2">'+escapeHtml(c.city)+' - '+escapeHtml(c.province)+'</p><p class="mt-2">امتیاز: <b>'+Number(c.total_score||0).toFixed(2)+' از ۵</b></p><p class="text-xs text-slate-500">سالن: '+Number(c.halls||0)+' | صندلی فعال: '+Number(c.operational_seats||0)+'</p></div>').join('') || '<p class="text-slate-500">هنوز سینمایی ثبت نشده است.</p>';
         }
-
+        function openNewEvaluation() { document.getElementById('eval-list-view').classList.add('hidden');document.getElementById('eval-editor-view').classList.remove('hidden');renderEvalForm(); }
+        function closeEvaluation() { document.getElementById('eval-editor-view').classList.add('hidden');document.getElementById('eval-list-view').classList.remove('hidden'); }
+        function renderEvalForm() {
+            const options=Array.from({length:21},(_,i)=>'<option value="'+(i/4)+'" '+(i===12?'selected':'')+'>'+(i/4).toFixed(2)+'</option>').join('');
+            document.getElementById('eval-form-dynamic').innerHTML=STATE.schema.map((cat,i)=>'<details class="bg-slate-50 border rounded-2xl p-4 mb-3" '+(i===0?'open':'')+'><summary class="font-black text-lg p-2">'+escapeHtml(cat.name)+' <span class="text-xs text-slate-500">('+cat.parameters.length+' پارامتر)</span></summary><div class="space-y-3 mt-3">'+cat.parameters.map(p=>'<div class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-white rounded-xl p-4 border"><label class="md:col-span-2 min-w-0 font-bold text-sm">'+escapeHtml(p.name)+'</label><label class="min-w-0 text-xs">امتیاز از ۵<select class="block w-full border rounded-lg p-2 mt-1" id="ev_sc_'+p.id+'">'+options+'</select></label><input class="md:col-span-2 w-full min-w-0 border rounded-lg p-2" id="ev_val_'+p.id+'" placeholder="توضیحات (اختیاری)"></div>').join('')+'</div></details>').join('') || '<p>ابتدا شاخص‌ها را تعریف کنید.</p>';
+        }
         async function submitEval() { if (!activeAdmin) return;
             const name = document.getElementById('ev-name').value.trim();
             if(!name) { showToast("وارد کردن نام سینما الزامی است.", "error"); return; }
 
             let total_score = 0;
             let evData = {};
-            for (const cat of STATE.schema) for (const p of cat.parameters) { const input = document.getElementById('ev_sc_' + cat.id + '_' + p.id); const score = Number(input?.value); if (!input || !input.value.trim() || !Number.isFinite(score) || score < 0 || score > 5) { showToast('امتیاز باید بین صفر و پنج باشد.', 'error'); return; } }
+            for (const cat of STATE.schema) for (const p of cat.parameters) { const input = document.getElementById('ev_sc_' + cat.id + '_' + p.id); const score = Number(input?.value); if (!input || !input.value.trim() || !Number.isFinite(score) || score < 0 || score > 5 || !Number.isInteger(score*4)) { showToast('امتیاز باید بین صفر و پنج باشد.', 'error'); return; } }
             for (const id of ['ev-halls','ev-total','ev-op','ev-nom','ev-shows']) { const v = document.getElementById(id).value; if (!v.trim() || !Number.isInteger(Number(v)) || Number(v) < 0) { showToast('مقادیر ظرفیت و تعداد باید عدد صحیح نامنفی باشند.', 'error'); return; } }
             if (Number(document.getElementById('ev-op').value) > Number(document.getElementById('ev-total').value)) { showToast('صندلی عملیاتی از ظرفیت کل بیشتر است.', 'error'); return; }
 
@@ -516,7 +508,7 @@
                 evData[cat.id] = { score: 0, parameters: {} };
                 let catScore = 0;
                 cat.parameters.forEach(p => {
-                    const pScore = parseFloat(document.getElementById(`ev_sc_${cat.id}_${p.id}`).value) || 0;
+                    const pScore = parseFloat(document.getElementById(`ev_sc_${p.id}`).value) || 0;
                     const pVal = document.getElementById(`ev_val_${cat.id}_${p.id}`).value;
                     evData[cat.id].parameters[p.id] = { score: pScore, value: pVal };
                     catScore += (pScore * p.weight);
@@ -537,7 +529,7 @@
                 if (error) throw error;
                 showToast("اطلاعات با موفقیت در دیتابیس ثبت شد.");
                 ['ev-name','ev-prov','ev-city','ev-address','ev-details'].forEach(id => document.getElementById(id).value = '');
-                await fetchData();
+                await fetchData(); closeEvaluation();
             } catch (err) { console.error(err); showToast("خطا در ثبت اطلاعات", "error"); }
         }
 
