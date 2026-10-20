@@ -314,10 +314,18 @@
                 showToast("کلید Supabase در سورس کد وارد نشده است", "error");
                 return;
             }
+            const authLink = new URLSearchParams(window.location.hash.slice(1));
+            const isInviteOrRecovery = ['invite','recovery'].includes(authLink.get('type')) || new URLSearchParams(window.location.search).has('code');
             dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             dbClient.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
             const { data: { session } } = await dbClient.auth.getSession();
-            if (session) await authorizeAdmin(session.user);
+            if (session) {
+                await authorizeAdmin(session.user);
+                if (isInviteOrRecovery && activeAdmin) {
+                    document.getElementById('new-password-status').textContent='برای ورودهای بعدی، رمز عبور جدید تعیین کنید.';
+                    document.getElementById('password-dialog').showModal();
+                }
+            }
         });
 
         function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x])); }
@@ -763,9 +771,10 @@
                 container.innerHTML=(result.members||[]).map(user=>{
                     const isOwner=user.role==='owner';
                     const name=escapeHtml(user.email||'نامشخص');
-                    return '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl"><div class="min-w-0"><p class="font-bold text-slate-800 break-all">'+name+'</p><p class="text-xs text-slate-500 mt-1">'+(isOwner?'مالک پنل':'مدیر')+'</p></div>'+(isOwner?'<span class="text-xs text-emerald-700 font-black">حساب اصلی</span>':'<button type="button" class="shrink-0 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-xl font-bold text-sm" data-revoke="'+escapeHtml(user.id)+'">لغو دسترسی</button>')+'</div>';
+                    return '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl"><div class="min-w-0"><p class="font-bold text-slate-800 break-all">'+name+'</p><p class="text-xs text-slate-500 mt-1">'+(isOwner?'مالک پنل':'مدیر')+'</p></div>'+(isOwner?'<span class="text-xs text-emerald-700 font-black">حساب اصلی</span>':'<div class="flex flex-wrap gap-2"><button type="button" class="shrink-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-xl font-bold text-sm" data-resend="'+escapeHtml(user.id)+'">ارسال لینک تعیین رمز</button><button type="button" class="shrink-0 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-xl font-bold text-sm" data-revoke="'+escapeHtml(user.id)+'">لغو دسترسی</button></div>')+'</div>';
                 }).join('')||'<p>کاربری پیدا نشد.</p>';
                 container.querySelectorAll('[data-revoke]').forEach(btn=>btn.addEventListener('click',()=>revokeDashboardUser(btn.dataset.revoke)));
+                container.querySelectorAll('[data-resend]').forEach(btn=>btn.addEventListener('click',()=>resendDashboardAccess(btn.dataset.resend,btn)));
             } catch(e) { container.textContent='خطا در دریافت کاربران: '+e.message; }
         }
         async function inviteDashboardUser(event) {
@@ -776,12 +785,23 @@
             try {
                 const result=await callUserManager({action:'invite',email});
                 status.className='text-sm mt-3 font-bold text-emerald-700';
-                status.textContent=result.restored?'دسترسی حساب موجود فعال شد.':'دعوت‌نامه ارسال شد؛ مدیر باید ایمیل خود را بررسی کند.';
+                status.textContent=result.restored?'حساب قبلی مجاز است. برای ارسال لینک جدید از دکمه «ارسال لینک تعیین رمز» در فهرست زیر استفاده کنید.':'دعوت‌نامه ارسال شد؛ مدیر باید ایمیل خود را بررسی کند.';
                 document.getElementById('user-invite-email').value='';
                 await loadDashboardUsers();
             } catch(e) {
                 status.className='text-sm mt-3 font-bold text-red-600';status.textContent='دعوت ناموفق بود: '+e.message;
             } finally {button.disabled=false;button.textContent='ارسال دعوت‌نامه';}
+        }
+        async function resendDashboardAccess(userId,button) {
+            if(activeRole!=='owner') return;
+            const label=button.textContent;
+            button.disabled=true;button.textContent='در حال ارسال...';
+            try {
+                await callUserManager({action:'resend_access',user_id:userId});
+                showToast('لینک تازه تعیین رمز به ایمیل مدیر ارسال شد.','success');
+            } catch(e) {
+                showToast('ارسال مجدد ناموفق بود: '+e.message,'error');
+            } finally {button.disabled=false;button.textContent=label;}
         }
         async function revokeDashboardUser(userId) {
             if(activeRole!=='owner') return;
