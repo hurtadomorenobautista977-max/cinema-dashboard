@@ -144,7 +144,7 @@
                     <div class="flex-1"><select id="prof-selector" class="bg-slate-50 font-black text-lg text-navy-900 border-none"></select></div>
                 </div>
 
-                <div id="prof-content" class="hidden space-y-8"><div id="profile-insights" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                <div id="prof-content" class="hidden space-y-8"><div id="profile-insights" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div><div id="profile-analysis" class="bg-white rounded-2xl border p-5"></div><div class="bg-white rounded-3xl p-6 border"><h3 class="font-black text-lg mb-4">مقایسه شاخص‌های سینما با میانگین شبکه</h3><div class="relative h-80"><canvas id="profileCompareChart"></canvas></div></div>
                     <div class="flex gap-6">
                         <!-- کارت نمره کلی -->
                         <div class="bg-navy-900 rounded-[32px] p-8 text-white flex-1 relative overflow-hidden flex flex-col justify-center items-center shadow-xl">
@@ -488,6 +488,12 @@
                 </div>`;
             });
             document.getElementById('prof-details').innerHTML = html;
+            const categoryStats=STATE.schema.map(cat=>({name:cat.name,score:Number(evData[cat.id]?.score||0),average:STATE.cinemas.reduce((sum,item)=>sum+Number(item.evaluation_data?.[cat.id]?.score||0),0)/(STATE.cinemas.length||1)}));
+            const ranked=[...categoryStats].sort((a,b)=>b.score-a.score);
+            const best=ranked[0],weak=ranked.at(-1);
+            document.getElementById('profile-analysis').innerHTML=best?'<div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><p class="text-sm text-slate-500">قوی‌ترین شاخص</p><b class="text-emerald-700">'+escapeHtml(best.name)+' ('+best.score.toFixed(2)+')</b></div><div><p class="text-sm text-slate-500">شاخص دارای بیشترین فرصت بهبود</p><b class="text-orange-700">'+escapeHtml(weak.name)+' ('+weak.score.toFixed(2)+')</b></div></div>':'';
+            if(STATE.charts.profileCompare) STATE.charts.profileCompare.destroy();
+            STATE.charts.profileCompare=new Chart(document.getElementById('profileCompareChart'),{type:'bar',data:{labels:categoryStats.map(x=>x.name),datasets:[{label:'سینمای منتخب',data:categoryStats.map(x=>x.score),backgroundColor:'#10b981'},{label:'میانگین شبکه',data:categoryStats.map(x=>x.average),backgroundColor:'#94a3b8'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:5}}}});
 
             if(STATE.charts.radar) STATE.charts.radar.destroy();
             STATE.charts.radar = new Chart(document.getElementById('radarChart').getContext('2d'), {
@@ -586,7 +592,7 @@
         const upS = (c, p, k, v) => { if(k==='weight') { openWeightDialog(p===null?null:c); return; } p === null ? STATE.schema[c][k] = v : STATE.schema[c].parameters[p][k] = v; }
         const addP = c => { STATE.schema[c].parameters.push({ id: genId('p'), name: 'پارامتر جدید', weight: 0 }); renderSchemaEditor(); openWeightDialog(c); }
         const rmP = (c, p) => { STATE.schema[c].parameters.splice(p, 1); renderSchemaEditor(); if(STATE.schema[c].parameters.length) openWeightDialog(c); }
-        const addCat = () => { STATE.schema.push({ id: genId('cat'), name: 'شاخص جدید', weight: 0, parameters: [] }); renderSchemaEditor(); openWeightDialog(null); }
+        const addCat = () => { STATE.schema.push({ id: genId('cat'), name: 'شاخص جدید', weight: 0, parameters: [{id:genId('p'),name:'پارامتر جدید',weight:1}] }); renderSchemaEditor(); openWeightDialog(null); }
         const rmC = c => { STATE.schema.splice(c, 1); renderSchemaEditor(); if(STATE.schema.length) openWeightDialog(null); }
 
         let weightCategory=null;
