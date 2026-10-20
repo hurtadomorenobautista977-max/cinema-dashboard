@@ -56,7 +56,7 @@
         @keyframes slideOut { to { opacity: 0; transform: translateX(-50px); } }
     </style>
 </head>
-<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form id="auth-form" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-5"><h1 class="text-2xl font-black text-center">ورود مدیران بهمن سبز</h1><label>ایمیل<input id="auth-email" type="email" autocomplete="username" required></label><label>رمز عبور<input id="auth-password" type="password" autocomplete="current-password" required></label><p id="auth-error" class="text-red-600 text-sm" role="alert"></p><button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">ورود</button></form></div>
+<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form onsubmit="event.preventDefault(); if (typeof loginAdmin === 'function') { void loginAdmin(event); } else { document.getElementById('auth-error').textContent = 'خطا در راه‌اندازی صفحه؛ صفحه را دوباره بارگذاری کنید.'; } return false;" id="auth-form" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-5"><h1 class="text-2xl font-black text-center">ورود مدیران بهمن سبز</h1><label>ایمیل<input id="auth-email" type="email" autocomplete="username" required></label><label>رمز عبور<input id="auth-password" type="password" autocomplete="current-password" required></label><p id="auth-error" class="text-red-600 text-sm" role="alert"></p><button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">ورود</button></form></div>
 
     <aside class="w-72 bg-navy-900 text-slate-300 flex flex-col h-full shadow-2xl z-20">
         <div class="h-28 flex items-center justify-center border-b border-slate-800">
@@ -243,7 +243,7 @@
         // توجه: کلید خود را جایگزین متن زیر کنید
         const SUPABASE_KEY = "sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u"; 
         
-        let supabase;
+        let dbClient;
         let activeAdmin = null;
         let STATE = { cinemas: [], schema: [], charts: {} };
 
@@ -259,7 +259,6 @@
 
         // === 2. راه‌اندازی اولیه ===
         document.addEventListener('DOMContentLoaded', async () => {
-            document.getElementById('auth-form').addEventListener('submit', loginAdmin);
             try { initNavigation(); } catch (e) { console.error(e); }
             if (!window.supabase?.createClient) { document.getElementById('auth-error').textContent = 'خطا در بارگذاری اتصال Supabase؛ صفحه را دوباره بارگذاری کنید.'; return; }
             if(SUPABASE_KEY.includes('اینجا')) {
@@ -268,9 +267,9 @@
                 showToast("کلید Supabase در سورس کد وارد نشده است", "error");
                 return;
             }
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
-            const { data: { session } } = await supabase.auth.getSession();
+            dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            dbClient.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') lockDashboard(); });
+            const { data: { session } } = await dbClient.auth.getSession();
             if (session) await authorizeAdmin(session.user);
         });
 
@@ -282,10 +281,10 @@
         }
         async function authorizeAdmin(user) {
             if (!user) return;
-            const { data, error } = await supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            const { data, error } = await dbClient.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
             if (error || !data) {
                 document.getElementById('auth-error').textContent = 'این حساب مجوز مدیریت ندارد.';
-                await supabase.auth.signOut(); return;
+                await dbClient.auth.signOut(); return;
             }
             activeAdmin = user.id;
             document.getElementById('auth-gate').classList.add('hidden');
@@ -298,8 +297,8 @@
             btn.disabled = true; btn.textContent = 'در حال ورود...';
             document.getElementById('auth-error').textContent = '';
             try {
-                if (!supabase?.auth) throw new Error('Supabase unavailable');
-                const { data, error } = await supabase.auth.signInWithPassword({
+                if (!dbClient?.auth) throw new Error('Supabase unavailable');
+                const { data, error } = await dbClient.auth.signInWithPassword({
                     email: document.getElementById('auth-email').value.trim(),
                     password: document.getElementById('auth-password').value
                 });
@@ -310,7 +309,7 @@
                 document.getElementById('auth-error').textContent = 'ورود ناموفق بود. اطلاعات حساب را بررسی کنید.';
             } finally { btn.disabled = false; btn.textContent = 'ورود'; }
         }
-        async function logoutAdmin() { await supabase.auth.signOut(); lockDashboard(); }
+        async function logoutAdmin() { await dbClient.auth.signOut(); lockDashboard(); }
         function initNavigation() {
             const items = document.querySelectorAll('.nav-item');
             const views = document.querySelectorAll('.view-section');
@@ -347,13 +346,13 @@
         async function fetchData() { if (!activeAdmin) return;
             try {
                 // 1. واکشی ساختار ارزیابی (Schema)
-                const { data: cfg, error: errC } = await supabase.from('app_config').select('*').eq('key', 'evaluation_schema');
+                const { data: cfg, error: errC } = await dbClient.from('app_config').select('*').eq('key', 'evaluation_schema');
                 if (errC) throw errC;
                 if (cfg && cfg.length > 0) STATE.schema = cfg[0].value;
                 else STATE.schema = []; // ساختار خالی
 
                 // 2. واکشی سینماها
-                const { data: cins, error: errS } = await supabase.from('cinemas').select('*').order('total_score', { ascending: false });
+                const { data: cins, error: errS } = await dbClient.from('cinemas').select('*').order('total_score', { ascending: false });
                 if (errS) throw errS;
                 STATE.cinemas = cins || [];
 
@@ -534,7 +533,7 @@
             };
 
             try {
-                const { error } = await supabase.from('cinemas').insert([data]);
+                const { error } = await dbClient.from('cinemas').insert([data]);
                 if (error) throw error;
                 showToast("اطلاعات با موفقیت در دیتابیس ثبت شد.");
                 ['ev-name','ev-prov','ev-city','ev-address','ev-details'].forEach(id => document.getElementById(id).value = '');
@@ -586,7 +585,7 @@
             const sumOne = n => Math.abs(n - 1) < 0.001;
             if (!STATE.schema.length || STATE.schema.some(c => !c.name?.trim() || !validWeight(c.weight) || !c.parameters?.length || c.parameters.some(p => !p.name?.trim() || !validWeight(p.weight)) || !sumOne(c.parameters.reduce((a,p) => a + p.weight, 0))) || !sumOne(STATE.schema.reduce((a,c) => a + c.weight, 0))) { showToast('مجموع وزن‌ها در هر سطح باید یک باشد و نام‌ها خالی نباشند.', 'error'); return; }
             try {
-                const { error } = await supabase.from('app_config').upsert({ key: 'evaluation_schema', value: STATE.schema });
+                const { error } = await dbClient.from('app_config').upsert({ key: 'evaluation_schema', value: STATE.schema });
                 if (error) throw error;
                 showToast("ساختار با موفقیت در دیتابیس بروزرسانی شد.");
                 await fetchData();
