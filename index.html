@@ -338,7 +338,7 @@
                     if(target === 'dashboard') renderDash();
                     if(target === 'profile') fillProfSelector();
                     if(target === 'evaluate') { closeEvaluation(); renderEvalList(); }
-                    if(target === 'settings') renderSchemaEditor();
+                    if(target === 'settings') { try { renderSchemaEditor(); } catch(err) { console.error('Settings error',err); document.getElementById('schema-editor').textContent='خطا در نمایش شاخص‌ها. لطفاً صفحه را تازه‌سازی کنید.'; showToast('خطا در نمایش مدیریت شاخص‌ها','error'); } }
                 });
             });
         }
@@ -359,7 +359,7 @@
 
                 document.getElementById('conn-status').className = "px-5 py-2 rounded-full bg-brand-50 text-brand-600 border border-brand-200 text-sm font-bold flex items-center gap-2";
                 document.getElementById('conn-status').innerHTML = '<i class="bi bi-check-circle-fill"></i> متصل';
-                renderDash(); renderEvalList(); fillProfSelector();
+                renderDash(); renderEvalList(); fillProfSelector(); renderSchemaEditor();
             } catch (err) {
                 console.error(err);
                 document.getElementById('conn-status').className = "px-5 py-2 rounded-full bg-red-50 text-red-600 border border-red-200 text-sm font-bold flex items-center gap-2";
@@ -550,10 +550,13 @@
         const genId = p => p + '_' + Math.random().toString(36).substr(2,6);
 
         function renderSchemaEditor() {
+            const target=document.getElementById('schema-editor');
+            if (!target) return;
+            if (!Array.isArray(STATE.schema)) { target.textContent='ساختار شاخص‌ها هنوز دریافت نشده است.'; return; }
             let html = '';
             STATE.schema.forEach((cat, cIdx) => {
                 let pHtml = '';
-                cat.parameters.forEach((p, pIdx) => {
+                (cat.parameters || []).forEach((p, pIdx) => {
                     pHtml += `
                     <div class="flex gap-3 mb-2 items-center pl-8">
                         <i class="bi bi-arrow-return-left text-slate-300"></i>
@@ -576,7 +579,7 @@
                     <div>${pHtml}</div>
                 </div>`;
             });
-            document.getElementById('schema-editor').innerHTML = html;
+            target.innerHTML = html || '<div class="bg-white rounded-2xl p-8 text-center">هیچ شاخصی تعریف نشده است. از دکمه افزودن شاخص استفاده کنید.</div>';
         }
 
         const upS = (c, p, k, v) => { if(k==='weight') { openWeightDialog(p===null?null:c); return; } p === null ? STATE.schema[c][k] = v : STATE.schema[c].parameters[p][k] = v; }
