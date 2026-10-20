@@ -94,6 +94,7 @@
             <a href="#" data-target="settings" class="nav-item flex items-center gap-4 px-4 py-4 cursor-pointer text-sm font-medium hover:bg-slate-800">
                 <i class="bi bi-sliders text-xl text-slate-400"></i> مدیریت پویا شاخص‌ها
             </a>
+            <a href="#" data-target="users" id="users-nav" class="nav-item hidden items-center gap-4 px-4 py-4 cursor-pointer text-sm font-medium hover:bg-slate-800"><i class="bi bi-people-fill text-xl text-slate-400"></i> مدیریت کاربران</a>
             <a href="#" data-target="backup" class="nav-item flex items-center gap-4 px-4 py-4 cursor-pointer text-sm font-medium hover:bg-slate-800">
                 <i class="bi bi-cloud-arrow-down-fill text-xl text-slate-400"></i> خروجی امن داده‌ها
             </a>
@@ -235,6 +236,25 @@
                 </button>
             </div>
 
+            <div id="view-users" class="view-section">
+                <div class="max-w-5xl mx-auto space-y-6">
+                    <div class="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-3"><i class="bi bi-person-plus text-2xl text-emerald-600"></i><h3 class="text-xl font-black">دعوت مدیر جدید</h3></div>
+                        <p class="text-sm text-slate-500 mb-5">ایمیل مدیر را وارد کن. برای او دعوت‌نامه ارسال می‌شود تا با حساب خودش به داشبورد دسترسی داشته باشد. مدیریت کاربران فقط در اختیار مالک پنل است.</p>
+                        <form id="user-invite-form" onsubmit="inviteDashboardUser(event)" class="flex flex-col md:flex-row gap-3 items-end">
+                            <label class="flex-1 w-full text-sm font-bold text-slate-600">ایمیل مدیر
+                                <input id="user-invite-email" type="email" required autocomplete="off" class="mt-2" placeholder="manager@example.com">
+                            </label>
+                            <button id="user-invite-submit" type="submit" class="rounded-xl bg-emerald-600 text-white px-7 py-3.5 font-bold w-full md:w-auto">ارسال دعوت‌نامه</button>
+                        </form>
+                        <p id="user-invite-status" class="text-sm mt-3 font-bold" role="status"></p>
+                    </div>
+                    <div class="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between gap-3 mb-5"><h3 class="text-xl font-black">افراد دارای دسترسی</h3><button onclick="loadDashboardUsers()" class="bg-slate-100 px-4 py-2 rounded-xl font-bold text-sm">بازخوانی</button></div>
+                        <div id="dashboard-users-list" class="space-y-3 text-slate-500">در حال دریافت فهرست...</div>
+                    </div>
+                </div>
+            </div>
             <div id="view-backup" class="view-section">
                 <div class="bg-white rounded-[32px] p-12 shadow-sm border border-slate-100 text-center max-w-xl mx-auto mt-10">
                     <div class="w-24 h-24 bg-slate-50 rounded-[24px] flex items-center justify-center text-4xl text-slate-300 mx-auto mb-8"><i class="bi bi-shield-lock-fill"></i></div>
@@ -261,6 +281,7 @@
         
         let dbClient;
         let activeAdmin = null;
+        let activeRole = null;
         let STATE = { cinemas: [], schema: [], charts: {} };
 
         // سیستم Toast
@@ -291,19 +312,23 @@
 
         function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x])); }
         function lockDashboard() {
-            activeAdmin = null; STATE.cinemas = []; STATE.schema = [];
+            activeAdmin = null; activeRole = null; STATE.cinemas = []; STATE.schema = [];
+            document.getElementById('users-nav').classList.add('hidden'); document.getElementById('users-nav').classList.remove('flex');
             document.getElementById('auth-gate').classList.remove('hidden');
             document.getElementById('logout-admin').classList.add('hidden');
             document.getElementById('logout-admin').classList.remove('flex');
         }
         async function authorizeAdmin(user) {
             if (!user) return;
-            const { data, error } = await dbClient.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            const { data, error } = await dbClient.from('admin_users').select('user_id,role').eq('user_id', user.id).maybeSingle();
             if (error || !data) {
                 document.getElementById('auth-error').textContent = 'این حساب مجوز مدیریت ندارد.';
                 await dbClient.auth.signOut(); return;
             }
             activeAdmin = user.id;
+            activeRole = data.role;
+            document.getElementById('users-nav').classList.toggle('hidden', activeRole !== 'owner');
+            document.getElementById('users-nav').classList.toggle('flex', activeRole === 'owner');
             document.getElementById('auth-gate').classList.add('hidden');
             document.getElementById('logout-admin').classList.remove('hidden');
             document.getElementById('logout-admin').classList.add('flex');
@@ -336,7 +361,8 @@
                 'profile': ['پروفایل جامع سینما', 'جزئیات، ریزنمرات و یادداشت‌های پارامترها'],
                 'evaluate': ['ارزیابی و ثبت هوشمند', 'ورود اطلاعات سینما منطبق با شاخص‌های پویا'],
                 'settings': ['مدیریت پویا شاخص‌ها', 'ویرایش درخت شاخص‌ها، پارامترها و وزن‌ها'],
-                'backup': ['خروجی امن داده‌ها', 'دانلود نسخه پشتیبان JSON کل سیستم']
+                'backup': ['خروجی امن داده‌ها', 'دانلود نسخه پشتیبان JSON کل سیستم'],
+                'users': ['مدیریت کاربران', 'دعوت مدیران و کنترل دسترسی به پنل']
             };
 
             items.forEach(item => {
@@ -355,6 +381,7 @@
                     if(target === 'dashboard') renderDash();
                     if(target === 'profile') fillProfSelector();
                     if(target === 'evaluate') { closeEvaluation(); renderEvalList(); }
+                    if(target === 'users') { if(activeRole !== 'owner') { document.querySelector('[data-target="dashboard"]').click(); return; } loadDashboardUsers(); }
                     if(target === 'settings') { try { renderSchemaEditor(); } catch(err) { console.error('Settings error',err); document.getElementById('schema-editor').textContent='خطا در نمایش شاخص‌ها. لطفاً صفحه را تازه‌سازی کنید.'; showToast('خطا در نمایش مدیریت شاخص‌ها','error'); } }
                 });
             });
@@ -691,6 +718,55 @@
             } catch (err) { console.error(err); showToast("خطا در ذخیره‌سازی", "error"); }
         }
 
+
+        const userManagerEndpoint = SUPABASE_URL + '/functions/v1/manage-dashboard-users';
+        async function callUserManager(payload) {
+            if(activeRole!=='owner' || !activeAdmin) throw new Error('مدیریت کاربران فقط در اختیار مالک پنل است.');
+            const {data:{session},error:sessionError}=await dbClient.auth.getSession();
+            if(sessionError || !session?.access_token) throw new Error('نشست شما منقضی شده؛ دوباره وارد شوید.');
+            const response=await fetch(userManagerEndpoint,{method:'POST',headers:{
+                'Authorization':'Bearer '+session.access_token,
+                'apikey':SUPABASE_KEY,'Content-Type':'application/json'
+            },body:JSON.stringify(payload)});
+            const result=await response.json().catch(()=>({}));
+            if(!response.ok) throw new Error(result.error || 'خطا در ارتباط با سرور');
+            return result;
+        }
+        async function loadDashboardUsers() {
+            if(activeRole!=='owner') return;
+            const container=document.getElementById('dashboard-users-list');
+            container.textContent='در حال دریافت فهرست کاربران...';
+            try {
+                const result=await callUserManager({action:'list'});
+                container.innerHTML=(result.members||[]).map(user=>{
+                    const isOwner=user.role==='owner';
+                    const name=escapeHtml(user.email||'نامشخص');
+                    return '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl"><div class="min-w-0"><p class="font-bold text-slate-800 break-all">'+name+'</p><p class="text-xs text-slate-500 mt-1">'+(isOwner?'مالک پنل':'مدیر')+'</p></div>'+(isOwner?'<span class="text-xs text-emerald-700 font-black">حساب اصلی</span>':'<button type="button" class="shrink-0 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-xl font-bold text-sm" data-revoke="'+escapeHtml(user.id)+'">لغو دسترسی</button>')+'</div>';
+                }).join('')||'<p>کاربری پیدا نشد.</p>';
+                container.querySelectorAll('[data-revoke]').forEach(btn=>btn.addEventListener('click',()=>revokeDashboardUser(btn.dataset.revoke)));
+            } catch(e) { container.textContent='خطا در دریافت کاربران: '+e.message; }
+        }
+        async function inviteDashboardUser(event) {
+            event.preventDefault();
+            const email=document.getElementById('user-invite-email').value.trim();
+            const status=document.getElementById('user-invite-status'),button=document.getElementById('user-invite-submit');
+            button.disabled=true;button.textContent='در حال ارسال...';status.textContent='';
+            try {
+                const result=await callUserManager({action:'invite',email});
+                status.className='text-sm mt-3 font-bold text-emerald-700';
+                status.textContent=result.restored?'دسترسی حساب موجود فعال شد.':'دعوت‌نامه ارسال شد؛ مدیر باید ایمیل خود را بررسی کند.';
+                document.getElementById('user-invite-email').value='';
+                await loadDashboardUsers();
+            } catch(e) {
+                status.className='text-sm mt-3 font-bold text-red-600';status.textContent='دعوت ناموفق بود: '+e.message;
+            } finally {button.disabled=false;button.textContent='ارسال دعوت‌نامه';}
+        }
+        async function revokeDashboardUser(userId) {
+            if(activeRole!=='owner') return;
+            if(!confirm('دسترسی این مدیر به پنل قطع شود؟'))return;
+            try {await callUserManager({action:'revoke',user_id:userId});showToast('دسترسی مدیر لغو شد.');await loadDashboardUsers();}
+            catch(e){showToast('لغو دسترسی ناموفق بود: '+e.message,'error');}
+        }
         // === 8. بک‌آپ امن ===
         function downloadBackup() {
             if (!activeAdmin) { showToast("ابتدا وارد حساب مدیر شوید.", "error"); return; }
