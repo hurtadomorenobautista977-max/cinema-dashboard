@@ -66,7 +66,16 @@
         @keyframes slideOut { to { opacity: 0; transform: translateX(-50px); } }
     </style>
 </head>
-<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form onsubmit="event.preventDefault(); if (typeof loginAdmin === 'function') { void loginAdmin(event); } else { document.getElementById('auth-error').textContent = 'خطا در راه‌اندازی صفحه؛ صفحه را دوباره بارگذاری کنید.'; } return false;" id="auth-form" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-5"><h1 class="text-2xl font-black text-center">ورود مدیران بهمن سبز</h1><label>ایمیل<input id="auth-email" type="email" autocomplete="username" required></label><label>رمز عبور<input id="auth-password" type="password" autocomplete="current-password" required></label><p id="auth-error" class="text-red-600 text-sm" role="alert"></p><button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">ورود</button></form></div>
+<body class="flex h-screen text-slate-800"><div id="auth-gate" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4" dir="rtl"><form id="auth-form" onsubmit="return loginAdmin(event)" class="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md space-y-4">
+<div class="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 text-2xl"><i class="bi bi-shield-lock-fill"></i></div>
+<h1 class="text-2xl font-black text-center">ورود به داشبورد بهمن سبز</h1><p class="text-sm text-slate-500 text-center">با ایمیل سازمانی و رمز خود وارد شوید.</p>
+<label class="block text-sm font-bold">ایمیل<input id="auth-email" type="email" autocomplete="username" inputmode="email" dir="ltr" required class="mt-2"></label>
+<label class="block text-sm font-bold">رمز عبور<div class="relative mt-2"><input id="auth-password" type="password" autocomplete="current-password" required class="pl-20" dir="ltr"><button type="button" onclick="toggleLoginPassword()" class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700">نمایش رمز</button></div></label>
+<p id="auth-error" class="text-red-600 text-sm min-h-[20px]" role="alert"></p>
+<button id="auth-submit" type="submit" class="w-full rounded-xl bg-emerald-600 text-white p-3.5 font-bold hover:bg-emerald-700">ورود به داشبورد</button>
+<button type="button" id="auth-reset-btn" onclick="sendPasswordReset()" class="block mx-auto text-emerald-700 text-sm font-bold hover:underline">رمز عبورم را فراموش کرده‌ام / لینک ورود می‌خواهم</button>
+<p id="auth-reset-status" class="text-sm text-center" role="status"></p>
+</form></div>
 
     <aside class="w-72 bg-navy-900 text-slate-300 flex flex-col h-full shadow-2xl z-20">
         <div class="h-28 flex items-center justify-center border-b border-slate-800">
@@ -352,23 +361,59 @@
             document.getElementById('logout-admin').classList.add('flex');
             await fetchData();
         }
+        function toggleLoginPassword() {
+            const input=document.getElementById('auth-password');
+            const visible=input.type==='password';
+            input.type=visible?'text':'password';
+            const button=input.parentElement.querySelector('button');
+            if(button) button.textContent=visible?'پنهان‌کردن':'نمایش رمز';
+        }
+        async function sendPasswordReset() {
+            const email=document.getElementById('auth-email').value.trim();
+            const status=document.getElementById('auth-reset-status');
+            const button=document.getElementById('auth-reset-btn');
+            status.className='text-sm text-center text-red-600';
+            if(!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+                status.textContent='ابتدا ایمیل خود را در کادر بالا وارد کنید.';return;
+            }
+            if(!dbClient?.auth) {status.textContent='اتصال برقرار نشده؛ صفحه را تازه‌سازی کنید.';return;}
+            button.disabled=true;button.textContent='در حال ارسال لینک...';
+            try {
+                const {error}=await dbClient.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
+                if(error) throw error;
+                status.className='text-sm text-center text-emerald-700';
+                status.textContent='اگر این ایمیل در سامانه ثبت شده باشد، لینک تعیین رمز ارسال می‌شود. پوشه اسپم را هم بررسی کنید.';
+            } catch(e) {
+                status.textContent='ارسال لینک ممکن نشد: '+(e?.message||'لطفاً دوباره تلاش کنید.');
+            } finally {button.disabled=false;button.textContent='رمز عبورم را فراموش کرده‌ام / لینک ورود می‌خواهم';}
+        }
         async function loginAdmin(event) {
             event.preventDefault();
-            const btn = document.getElementById('auth-submit');
-            btn.disabled = true; btn.textContent = 'در حال ورود...';
-            document.getElementById('auth-error').textContent = '';
+            const btn=document.getElementById('auth-submit');
+            if(btn.disabled)return false;
+            const errorBox=document.getElementById('auth-error');
+            const email=document.getElementById('auth-email').value.trim();
+            const password=document.getElementById('auth-password').value;
+            errorBox.textContent='';
+            if(!email || !password){errorBox.textContent='ایمیل و رمز عبور را وارد کنید.';return false;}
+            btn.disabled=true;btn.textContent='در حال بررسی حساب...';
             try {
-                if (!dbClient?.auth) throw new Error('Supabase unavailable');
-                const { data, error } = await dbClient.auth.signInWithPassword({
-                    email: document.getElementById('auth-email').value.trim(),
-                    password: document.getElementById('auth-password').value
-                });
-                if (error) throw error;
-                document.getElementById('auth-password').value = '';
+                if(!dbClient?.auth) throw new Error('اتصال به سرور آماده نیست. صفحه را دوباره بارگذاری کنید.');
+                const {data,error}=await dbClient.auth.signInWithPassword({email,password});
+                if(error) {
+                    if(error.status===429 || /rate limit|too many/i.test(error.message))throw new Error('تعداد تلاش‌ها زیاد بوده است؛ کمی بعد دوباره امتحان کنید یا لینک تعیین رمز بگیرید.');
+                    if(/email not confirmed/i.test(error.message))throw new Error('ایمیل هنوز تأیید نشده است؛ ایمیل دعوت یا تأیید را بررسی کنید.');
+                    if(/invalid login|invalid credentials/i.test(error.message))throw new Error('ایمیل یا رمز درست نیست. در صورت نداشتن رمز، از «لینک ورود می‌خواهم» استفاده کنید.');
+                    throw new Error(error.message||'ورود ناموفق بود.');
+                }
+                if(!data?.user)throw new Error('نشست ورود دریافت نشد.');
                 await authorizeAdmin(data.user);
-            } catch (error) {
-                document.getElementById('auth-error').textContent = 'ورود ناموفق بود. اطلاعات حساب را بررسی کنید.';
-            } finally { btn.disabled = false; btn.textContent = 'ورود'; }
+                if(activeAdmin) document.getElementById('auth-password').value='';
+            } catch(e) {
+                errorBox.textContent=e?.message || 'ارتباط برقرار نشد. اتصال اینترنت را بررسی کنید.';
+                console.error('Login failed:',e);
+            } finally {btn.disabled=false;btn.textContent='ورود به داشبورد';}
+            return false;
         }
         async function logoutAdmin() { await dbClient.auth.signOut(); lockDashboard(); }
         function initNavigation() {
