@@ -1,5 +1,6 @@
 (()=>{
 'use strict';
+window.CINEMA_MODEL={id:'cinema-condition-table-v3',version:1,title:'نظام ارزیابی و رتبه‌بندی سینماها'};
 const API='https://ccjykdpjprjaocglypij.supabase.co',KEY='sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u',ID=window.CINEMA_MODEL.id;
 let db,user,role,model,editor,records=[],cinemas=[],route='dashboard',cinemaId=null,answers={},context={},version=1,viewVersion=1,axis=null,dirty=false,busy=false,ready=false,search='',province='',statusFilter='',lastRecord=null;
 const $=id=>document.getElementById(id),clone=x=>JSON.parse(JSON.stringify(x)),h=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),n=(x,d=0)=>Number(x).toLocaleString('fa-IR',{minimumFractionDigits:d,maximumFractionDigits:d}),fmt=x=>typeof x==='number'&&Number.isFinite(x)?n(x,2):'—';
