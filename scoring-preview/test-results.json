@@ -1,0 +1,114 @@
+[
+  {
+    "name": "۱ پارکینگ اختصاصی کافی؛ نبود جایگزین",
+    "expected": 5,
+    "actual": 5,
+    "status": "passed"
+  },
+  {
+    "name": "۲ ظرفیت مکمل اختصاصی و عمومی",
+    "expected": 4,
+    "actual": 4,
+    "status": "passed"
+  },
+  {
+    "name": "۳ میانگین وزنی مستقل",
+    "expected": 4,
+    "actual": 4,
+    "status": "passed"
+  },
+  {
+    "name": "۴ نامرتبط از مخرج خارج می‌شود",
+    "expected": 5,
+    "actual": 5,
+    "status": "passed"
+  },
+  {
+    "name": "۵ بررسی‌نشده صفر نیست و نهایی نمی‌شود",
+    "expected": [
+      5,
+      0.5,
+      false
+    ],
+    "actual": [
+      5,
+      0.5,
+      false
+    ],
+    "status": "passed"
+  },
+  {
+    "name": "۶ نقص بحرانی و سقف قابل فعال‌سازی",
+    "expected": [
+      1,
+      2.49,
+      4
+    ],
+    "actual": [
+      1,
+      2.49,
+      4
+    ],
+    "status": "passed"
+  },
+  {
+    "name": "۷ تعداد ردیف‌ها وزن پارامتر را زیاد نمی‌کند",
+    "expected": 2.5,
+    "actual": 2.5,
+    "status": "passed"
+  },
+  {
+    "name": "۸ تغییر وزن",
+    "expected": 4,
+    "actual": 4,
+    "status": "passed"
+  },
+  {
+    "name": "۹ ارجاع دوباره‌شماری نمی‌شود",
+    "expected": 5,
+    "actual": 5,
+    "status": "passed"
+  },
+  {
+    "name": "۱۰ استقلال نسخه قدیم از تغییر وزن نسخه جدید",
+    "expected": [
+      2.5,
+      4
+    ],
+    "actual": [
+      2.5,
+      4
+    ],
+    "status": "passed"
+  },
+  {
+    "name": "نامرتبط بدون دلیل مانع نهایی‌سازی",
+    "expected": false,
+    "actual": false,
+    "status": "passed"
+  },
+  {
+    "name": "صفر یک ارزیابی کامل است",
+    "expected": [
+      0,
+      true
+    ],
+    "actual": [
+      0,
+      true
+    ],
+    "status": "passed"
+  },
+  {
+    "name": "ظرفیت فاقد تأیید یا ناقص محاسبه نمی‌شود",
+    "expected": null,
+    "actual": null,
+    "status": "passed"
+  },
+  {
+    "name": "وزن صفر حذف می‌شود",
+    "expected": 5,
+    "actual": 5,
+    "status": "passed"
+  }
+]

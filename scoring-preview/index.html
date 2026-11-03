@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="model.js"></script>
 <script defer src="source_loader.js"></script>
+<script defer src="engine.js"></script>
 <script defer src="app.js"></script>
 <style>
 :root{--ink:#142840;--slate:#66778a;--green:#047b64;--soft:#e9f7f2;--line:#e2e8ec;--bg:#f5f8fa;--orange:#e59c47}
@@ -29,12 +30,12 @@
 @media(max-width:1000px){.shell{display:block}.sidebar,.insight{height:auto;position:static;overflow:visible}.sidebar{padding:14px}.nav-list{display:flex;flex-direction:row;overflow:auto}.section-link{min-width:190px}.sidebar-bottom{display:none}.main{padding:16px}.insight{padding:18px;display:grid;grid-template-columns:repeat(2,1fr);gap:13px}.insight>.divider{display:none}.insight>*{min-width:0}.brand{padding:7px 10px 15px}.selector-block{grid-template-columns:1fr 1fr}}
 @media(max-width:610px){.selector-block,.report-grid,.modal-grid{grid-template-columns:1fr}.question-top{align-items:flex-start;flex-direction:column}.question-caption{max-width:100%}.q-footer,.rubric,.detail-row{margin-right:8px}.group-head{padding:16px}.question{padding:14px}.insight{grid-template-columns:1fr}.header-buttons{width:100%}.header-buttons>.btn{flex:1}.save-bar .btn{padding:12px}.score-ring{height:152px;width:152px}.main-top{display:block}}
 </style>
-</head>
+<style>textarea{width:100%;min-height:72px;border:1px solid #dce5e1;border-radius:10px;padding:10px;font:inherit;margin:8px 0}input[type=checkbox]{width:auto}.dialog{max-height:90vh;overflow:auto}.note-box p{line-height:1.9}.question,.group-card{overflow-wrap:anywhere}.rubric-list{line-height:1.9}</style></head>
 <body>
 <div id="authOverlay" class="auth-overlay">
 <form class="auth-card" id="loginForm">
  <div class="auth-icon">بـ</div><h2>ورود به مدل ارزیابی سینما</h2><p>فقط حساب‌های مدیر تأییدشدهٔ داشبورد بهمن سبز مجاز هستند.</p>
- <label>ایمیل مدیریتی<input id="loginEmail" dir="ltr" type="email" required autocomplete="username" placeholder="name@example.com"></label>
+ <label>نام کاربری یا ایمیل<input id="loginEmail" dir="ltr" type="text" required autocomplete="username" placeholder="name@example.com"></label>
  <label>رمز عبور<input id="loginPassword" dir="ltr" type="password" autocomplete="current-password" required></label>
  <div class="auth-error" id="loginError"></div><button id="loginBtn" class="btn primary" type="submit">ورود به سامانه</button>
  <div class="desktop-link" style="text-align:center"><a href="../" class="muted">بازگشت به داشبورد فعلی</a></div>
@@ -61,7 +62,7 @@
  <p class="rule-note">وزن‌ها و محدودیت‌های امتیازدهی هنوز مصوبه نهایی نیستند. نسخهٔ آزمایشی از اطلاعات قدیمی سینما فقط برای انتخاب مجموعه استفاده می‌کند؛ امتیازدهی قدیمی را تغییر نمی‌دهد.</p>
  <div id="oldVersionPrompt" class="old-prompt hidden"><span>از این سینما ارزیابی نسخه قدیمی وجود دارد.</span><button class="btn alt" id="importOld">انتقال پاسخ‌ها به پیش‌نویس</button></div>
  <div class="subheader"><h2 id="pageMainTitle">محورهای ارزیابی</h2><p id="pageMainNote">برای هر شاخص، وضعیت واقعی را ثبت کنید.</p></div>
- <div id="evaluatePane"><div id="groupsWrap"></div></div>
+ <div id="evaluatePane"><details class="group-card"><summary>اطلاعات و ظرفیت سینما — بدون امتیاز مستقل</summary><div id="profileFields" class="modal-grid"></div></details><div id="groupsWrap"></div></div>
  <div id="reportPane" class="hidden"><div class="report-grid" id="reportCards"></div><div id="reportCategories"></div><div class="report-alerts" id="reportAlerts"></div></div>
 </main>
 <aside class="insight">
