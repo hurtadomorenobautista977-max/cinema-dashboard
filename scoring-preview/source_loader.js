@@ -1,9 +1,10 @@
 /* خواندن مدل جامع استخراج‌شده از سند ۴۴ صفحه‌ای، بدون وابستگی به قالب قدیمی داشبورد */
 window.loadFullCinemaModel = async function () {
- const paths=Array.from({length:6},(_,i)=>"data/model-part"+(i+1)+".txt");
- const parts=await Promise.all(paths.map(async path=>{const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error("داده مدل دریافت نشد: "+path);return (await r.text()).trim();}));
+ const {data,error}=await arguments[0].from("cinema_scoring_source_models").select("payload_base64").eq("id",window.CINEMA_MODEL.id).single();
+ if(error||!data?.payload_base64)throw Error("مدل جامع فقط برای مدیر مجاز قابل دریافت است: "+(error?.message||"داده‌ای یافت نشد"));
+ const encoded=data.payload_base64;
  if(typeof DecompressionStream==="undefined")throw Error("مرورگر از بازکردن داده‌های فشرده پشتیبانی نمی‌کند.");
- const binary=atob(parts.join(""));
+ const binary=atob(encoded);
  const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
  const doc=JSON.parse(await new Response(stream).text());
