@@ -199,9 +199,8 @@ async function fetchRecords(){
 async function loadAll(){
  E("pageLoading").classList.remove("hidden");
  try{
-  let fullModel=null;
-  try{fullModel=await window.loadFullCinemaModel();}catch(err){console.warn("Full document load failed; fallback model in use",err);message("بارگذاری چک‌لیست کامل ناموفق بود؛ مدل خلاصهٔ پشتیبان نمایش داده می‌شود.","error");}
-  model=fullModel||deep(BASE);
+  // مدل جامع تنها پس از احراز هویت از داده‌های محافظت‌شده دریافت می‌شود؛ در صورت خطا ارزیابی ناقص فعال نمی‌شود.
+  model=await window.loadFullCinemaModel(db);
   const [m,c,r]=await Promise.all([
    db.from("cinema_scoring_model_overrides").select("*").eq("model_id",BASE.id).maybeSingle(),
    db.from("cinemas").select("id,name,province,city,address,halls,total_seats,operational_seats,daily_shows").order("name"),
