@@ -13,7 +13,8 @@
   for(const s of model.sections){const groups=[];
    for(const g of s.groups){const items=[],rows=[];
     for(const q of g.questions){const a=answers[q.id]||{};let why='';
-     if(g.mode==='reference'||q.tag==='reference')why='ارجاع به محل اصلی؛ بدون اثر دوباره در امتیاز';
+     if(q.type==='info')why='اطلاعات پشتیبان؛ بدون امتیاز مستقل';
+     else if(g.mode==='reference'||q.type==='reference'||q.tag==='reference')why='ارجاع به محل اصلی؛ بدون اثر دوباره در امتیاز';
      else if(s.mode==='bonus'&&context.amenities?.[g.id]!=='yes')why='امکان جانبی موجود یا تأیید نشده؛ بدون جریمه پایه';
      else if(a.na&&a.note?.trim().length>=8)why='نامرتبط: '+a.note;
      const excluded=!!why;

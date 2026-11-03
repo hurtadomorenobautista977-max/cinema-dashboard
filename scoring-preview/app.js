@@ -1,305 +1,114 @@
-(function(){
-"use strict";
-const API_URL="https://ccjykdpjprjaocglypij.supabase.co";
-const API_KEY="sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u";
-const BASE=window.CINEMA_MODEL;
-let db=null,actor=null,role=null,model=deep(BASE),cinemas=[],records=[],currentId=null,answers={},context={metro:"unknown",amenities:{}};
-let modelVersion=1,dirty=false,busy=false,tab="evaluate",axis="access",priorRecord=null;
-const E=id=>document.getElementById(id);
-function deep(x){return JSON.parse(JSON.stringify(x));}
-function h(x){return String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function fmt(x){return Number(x).toLocaleString("fa-IR",{minimumFractionDigits:2,maximumFractionDigits:2});}
-function count(x){return Number(x).toLocaleString("fa-IR");}
-function number(x){return Math.max(0,Math.min(5,Number(x)||0));}
-function hasScore(a){return a&&a.score!==null&&a.score!==undefined&&a.score!==""&&Number.isFinite(Number(a.score));}
-function recordFor(id,version){return records.find(x=>Number(x.cinema_id)===Number(id)&&Number(x.model_version)===Number(version));}
-function message(str,type="info"){const x=E("toast");x.textContent=str;x.className="toast show "+type;clearTimeout(message.timeout);message.timeout=setTimeout(()=>x.classList.remove("show"),5000);}
-function changed(v=true){dirty=v;E("saveMarker").textContent=v?"تغییرات ذخیره‌نشده":"ذخیره‌شده";E("saveMarker").className=v?"marker warn":"marker";}
-function findQuestion(id){for(const s of model.sections)for(const g of s.groups)for(const q of g.questions)if(q.id===id)return {q,g,s};return null;}
-function activeRule(q,g,s){
- if(g.mode==="reference"||q.tag==="reference")return {yes:false,why:"ارجاع بدون امتیاز؛ قبلاً در محور ایمنی محاسبه شده است."};
- const own=answers["parking_info_t2_1"]||answers["parking_own"];
- if(q.tag==="parkingAlternative"&&hasScore(own)&&!own.na&&Number(own.score)>=Number(model.policy.parkingThreshold))return {yes:false,why:"پارکینگ اختصاصی یا مشترک کفایت دارد؛ مسیر جایگزین نمره را کاهش نمی‌دهد."};
- if((q.tag==="metro"||q.id==="access_info_metro")&&context.metro==="no")return {yes:false,why:"نبود مترو در این شهر، نامرتبط است؛ به‌جای صفر از محاسبه کنار گذاشته شده است."};
- if(s.mode==="bonus"&&context.amenities[g.id]!=="yes")return {yes:false,why:context.amenities[g.id]==="no"?"این امکان وجود ندارد؛ امتیاز پایه کاهش نمی‌یابد.":"برای دریافت امتیاز تشویقی، وجود این امکان را تأیید کنید."};
- return {yes:true,why:""};
+(()=>{
+'use strict';
+const API='https://ccjykdpjprjaocglypij.supabase.co',KEY='sb_publishable_zie2dN-eYkhdACw1-7mHTQ_xR0tHw-u',ID=window.CINEMA_MODEL.id;
+let db,user,role,model,editor,records=[],cinemas=[],route='dashboard',cinemaId=null,answers={},context={},version=1,viewVersion=1,axis=null,dirty=false,busy=false,ready=false,search='',province='',statusFilter='',lastRecord=null;
+const $=id=>document.getElementById(id),clone=x=>JSON.parse(JSON.stringify(x)),h=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),n=(x,d=0)=>Number(x).toLocaleString('fa-IR',{minimumFractionDigits:d,maximumFractionDigits:d}),fmt=x=>typeof x==='number'&&Number.isFinite(x)?n(x,2):'—';
+const names={dashboard:['داشبورد و رتبه‌بندی','تصویر کلی شبکه بر اساس امتیاز کارشناسی و یک نسخه مشخص از مدل'],profile:['پروفایل سینما','اطلاعات مجموعه، جزئیات امتیازها، نقاط قوت و ضعف و سابقه ارزیابی'],evaluate:['ثبت ارزیابی کارشناسی','به ردیف‌های جدول امتیاز دهید؛ نتیجه در سطح پارامتر، شاخص و سینما محاسبه می‌شود'],schema:['مدیریت شاخص‌ها','تعریف و ویرایش شاخص، پارامتر، جدول و ردیف ارزیابی همراه با وزن هر سطح']};
+const current=()=>cinemas.find(c=>Number(c.id)===Number(cinemaId));
+const record=(id,v=version)=>records.find(r=>Number(r.cinema_id)===Number(id)&&Number(r.model_version)===Number(v));
+const calc=()=>window.CinemaScoring.calculate(model,answers,context);
+function toast(t,error=false){$('toast').textContent=t;$('toast').style.background=error?'#9a3640':'#153d34';$('toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').classList.remove('show'),6000);}
+function change(){dirty=true;const x=$('dirtyLabel');if(x)x.textContent='تغییرات ذخیره‌نشده';}
+function badge(t,k=''){return '<span class="badge '+k+'">'+h(t)+'</span>';}
+function date(t){return t?new Date(t).toLocaleString('fa-IR',{dateStyle:'medium',timeStyle:'short'}):'ثبت نشده';}
+function calculatedRecord(r){return r?.computed_results||{};}
+function valid(r){return r?.status==='completed'&&calculatedRecord(r).coverage===1&&Number.isFinite(calculatedRecord(r).score);}
+function selectCinema(){return '<label>انتخاب سینما<select id="cinemaPicker">'+cinemas.map(c=>'<option value="'+c.id+'" '+(Number(c.id)===Number(cinemaId)?'selected':'')+'>'+h(c.name)+' — '+h(c.city||c.province||'')+'</option>').join('')+'</select></label>';}
+function selectState(id,force=false){
+ if(!force&&dirty&&!confirm('تغییرات ارزیابی ذخیره نشده‌اند؛ بدون ذخیره ادامه می‌دهید؟'))return false;
+ cinemaId=Number(id);profileVersion=version;const r=record(cinemaId);answers=clone(r?.responses||{});context=clone(r?.profile_snapshot||{});context.amenities=context.amenities||{};dirty=false;lastRecord=r||null;return true;
 }
-function mean(items){let w=0,n=0;for(const [score,weight] of items){if(score!==null&&Number.isFinite(score)&&Number(weight)>0){w+=Number(weight);n+=Number(score)*Number(weight);}}return w?n/w:null;}
-function calculate(){return window.CinemaScoring.calculate(model,answers,context);}
-function ratingOptions(value){
- let str='<option value="">ارزیابی نشده</option>';
- for(let i=0;i<=20;i++){const v=i/4;str+='<option value="'+v+'" '+(value!==null&&value!==undefined&&value!==""&&Number(value)===v?"selected":"")+'>'+String(v).replace(".","٫")+' از ۵</option>';}
- if(value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value))&&Number(value)*4%1!==0)str+='<option selected value="'+Number(value)+'">'+fmt(value)+' از ۵ (محاسبه خودکار)</option>';
- return str;
+function nav(next){if(next==='schema'&&role!=='owner'){toast('ویرایش نظام ارزیابی فقط در اختیار مالک است.',true);return;}if(route==='schema'&&editor&&editorChanged()&&!confirm('تغییرات مدل هنوز نسخه جدید نشده‌اند؛ از ویرایش خارج می‌شوید؟'))return;route=next;if(route==='schema')editor=clone(model);render();window.scrollTo({top:0,behavior:'instant'});}
+function editorChanged(){return editor&&JSON.stringify(editor)!==JSON.stringify(model);}
+function render(){
+ $('pageTitle').textContent=names[route][0];$('pageSubtitle').textContent=names[route][1];$('versionLabel').textContent='نسخه مدل '+n(version);$('sideVersion').textContent='مدل جدول‌محور · نسخه '+n(version);document.querySelectorAll('[data-route]').forEach(e=>e.classList.toggle('active',e.dataset.route===route));
+ $('schemaNav').classList.toggle('hidden',role!=='owner');$('goEvaluate').disabled=!ready;$('refresh').disabled=busy;
+ if(!ready){$('content').innerHTML='<div class="empty">اطلاعات کامل هنوز بارگذاری نشده است.</div>';return;}
+ if(route==='dashboard')dashboard();if(route==='profile')profile();if(route==='evaluate')evaluate();if(route==='schema')schema();
 }
-function optionsChecklist(rubric){
- if(!rubric)return "";
- if(typeof rubric==="string"){
-  const clean=String(rubric).replace(/\s*(?=امتیاز\s*[۰۱۲۳۴۵0-5])/g,"<span class='rb-break'></span>");
-  return '<div class="rubric-list">'+h(clean).replace(/&lt;span class=&#39;rb-break&#39;&gt;&lt;\/span&gt;/g,"<div style='height:4px'></div>")+'</div>';
- }
- if(typeof rubric==="object")return '<div class="rubric-list">'+[5,4,3,2,1,0].map(i=>'<div><b>'+count(i)+': </b>'+h(rubric[i]??rubric[String(i)]??"")+'</div>').join("")+'</div>';
- return "";
+function dashboard(){
+ const rs=records.filter(r=>Number(r.model_version)===Number(viewVersion)),finals=rs.filter(valid),drafts=rs.filter(r=>r.status==='draft'),average=window.CinemaScoring.mean(finals.map(r=>[r.computed_results.score,1]));
+ const versions=[...new Set([version,...records.map(r=>Number(r.model_version))])].sort((a,b)=>b-a);
+ $('versionLabel').textContent='نمایش نسخه '+n(viewVersion)+(viewVersion!==version?' · جاری '+n(version):'');
+ const viewedModel=viewVersion===version?model:rs[0]?.model_snapshot;
+ const filtered=cinemas.filter(c=>(!search||[c.name,c.city,c.province].join(' ').includes(search))&&(!province||c.province===province)&&(!statusFilter||(statusFilter==='none'?!record(c.id,viewVersion):record(c.id,viewVersion)?.status===statusFilter)));
+ const ranks=finals.slice().sort((a,b)=>b.computed_results.score-a.computed_results.score);
+ const sorted=filtered.slice().sort((a,b)=>{const ra=record(a.id,viewVersion),rb=record(b.id,viewVersion);return Number(valid(rb))-Number(valid(ra))||(valid(ra)&&valid(rb)?rb.computed_results.score-ra.computed_results.score: a.name.localeCompare(b.name,'fa'));});
+ const rows=sorted.map(c=>{const r=record(c.id,viewVersion),x=calculatedRecord(r),rank=valid(r)?tools.rank(ranks.map(v=>v.computed_results.score),x.score):null;return '<tr><td><span class="rank-number">'+(valid(r)?n(rank):'—')+'</span></td><td><b>'+h(c.name)+'</b><br><small class="muted">'+h(c.province||'')+' / '+h(c.city||'')+'</small></td><td class="score-cell">'+fmt(x.score)+' <small>/ ۵</small></td><td><div class="bar"><i style="width:'+((x.coverage||0)*100)+'%"></i></div><small>'+n(Math.round((x.coverage||0)*100))+'٪</small></td><td>'+badge(valid(r)?'نهایی':r?'پیش‌نویس':'ارزیابی نشده',valid(r)?'green':r?'amber':'')+(x.risk?.length?' '+badge(n(x.risk.length)+' هشدار','red'):'')+'</td><td class="muted">'+date(r?.updated_at)+'</td><td><button class="small-button" data-open-profile="'+c.id+'" data-profile-version="'+viewVersion+'">مشاهده پروفایل</button></td></tr>';}).join('');
+ const axes=(viewedModel?.sections||[]).map(s=>{const a=window.CinemaScoring.mean(finals.map(r=>[r.computed_results.categoryScores?.find(x=>x.id===s.id)?.score??null,1]));return '<div class="axis-row"><div><span>'+h(s.name)+'</span><b>'+fmt(a)+'</b></div><div class="bar"><i style="width:'+((a||0)*20)+'%"></i></div></div>';}).join('');
+ const bins=[0,1,2,3,4].map(i=>finals.filter(r=>i===4?r.computed_results.score>=4:r.computed_results.score>=i&&r.computed_results.score<i+1).length),max=Math.max(1,...bins);
+ $('content').innerHTML='<div class="stats">'+[['تعداد سینماها',n(cinemas.length),'مجموع شبکه','▦'],['ارزیابی نهایی',n(finals.length),'با پوشش کامل در این نسخه','✓'],['میانگین امتیاز شبکه',fmt(average),'از ۵؛ فقط ارزیابی‌های نهایی','◈'],['در انتظار تکمیل',n(cinemas.length-finals.length),n(drafts.length)+' پیش‌نویس ثبت‌شده','◷']].map(([t,v,d,i])=>'<div class="card stat"><div><small>'+t+'</small><strong>'+v+'</strong><small>'+d+'</small></div><div class="stat-icon">'+i+'</div></div>').join('')+'</div><div class="grid2"><section class="card"><div class="section-head"><h2>میانگین شاخص‌های شبکه</h2>'+badge('نسخه '+n(viewVersion))+'</div>'+(finals.length?axes:'<div class="empty">پس از ثبت ارزیابی نهایی، نمودار شاخص‌ها نمایش داده می‌شود.</div>')+'</section><section class="card"><h2>توزیع امتیاز سینماها</h2>'+(finals.length?'<div class="chart-columns">'+bins.map((v,i)=>'<div class="chart-column" style="height:'+Math.max(2,v/max*115)+'px"><b>'+n(v)+'</b><span>'+n(i)+' تا '+n(i+1)+'</span></div>').join('')+'</div>':'<div class="empty">هنوز امتیاز نهایی برای نمایش توزیع وجود ندارد.</div>')+'<p class="content-note">امتیاز پیش‌نویس وارد میانگین، توزیع و رتبه‌بندی نمی‌شود.</p></section></div><section class="card"><div class="section-head"><h2>رتبه‌بندی و وضعیت سینماها</h2><button id="exportRanking" class="small-button">خروجی CSV</button></div><div class="filters"><label>جست‌وجو<input id="search" placeholder="نام سینما یا شهر…" value="'+h(search)+'"></label><label>استان<select id="provinceFilter"><option value="">همه استان‌ها</option>'+[...new Set(cinemas.map(c=>c.province).filter(Boolean))].sort().map(v=>'<option '+(province===v?'selected':'')+'>'+h(v)+'</option>').join('')+'</select></label><label>وضعیت<select id="statusFilter"><option value="">همه وضعیت‌ها</option>'+[['completed','نهایی'],['draft','پیش‌نویس'],['none','ارزیابی نشده']].map(([v,t])=>'<option value="'+v+'" '+(statusFilter===v?'selected':'')+'>'+t+'</option>').join('')+'</select></label><label>نسخه قابل مقایسه<select id="viewVersion">'+versions.map(v=>'<option value="'+v+'" '+(v===viewVersion?'selected':'')+'>نسخه '+n(v)+(v===version?' — جاری':' — تاریخچه')+'</option>').join('')+'</select></label></div><p class="content-note">رتبه فقط به ارزیابی‌های نهایی با پوشش ۱۰۰٪ و نسخه یکسان تعلق می‌گیرد؛ امتیازهای برابر رتبه یکسان دارند. خط تیره یعنی امتیاز معتبر برای رتبه‌بندی ثبت نشده است.</p><div class="table-wrap"><table class="ranking"><thead><tr><th>رتبه</th><th>سینما</th><th>امتیاز</th><th>پوشش ارزیابی</th><th>وضعیت</th><th>آخرین ثبت</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(!rows?'<div class="empty">موردی با این فیلترها یافت نشد.</div>':'')+'</section>';
+ $('search').oninput=e=>{search=e.target.value;const pos=e.target.selectionStart;dashboard();$('search').focus();$('search').setSelectionRange(pos,pos);};$('provinceFilter').onchange=e=>{province=e.target.value;dashboard();};$('statusFilter').onchange=e=>{statusFilter=e.target.value;dashboard();};$('viewVersion').onchange=e=>{viewVersion=Number(e.target.value);dashboard();};
+ $('exportRanking').onclick=()=>download('cinema-ranking-v'+viewVersion+'.csv','\ufeff'+[['رتبه','سینما','استان','شهر','امتیاز','پوشش','وضعیت','نسخه'],...sorted.map(c=>{const r=record(c.id,viewVersion);return [valid(r)?tools.rank(ranks.map(x=>x.computed_results.score),r.computed_results.score):'',c.name,c.province,c.city,r?.computed_results?.score??'',r?.computed_results?.coverage??'',r?.status||'',viewVersion];})].map(row=>row.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv');
 }
-function renderSelector(){
- E("cinemaSelect").innerHTML='<option value="">یک سینما انتخاب کنید</option>'+cinemas.map(c=>'<option value="'+c.id+'">'+h(c.name)+" — "+h(c.city||c.province||"")+'</option>').join("");
- if(currentId)E("cinemaSelect").value=String(currentId);
- E("modelVersion").textContent="نسخه "+count(modelVersion)+" / سند کامل";
- E("policyOwnerBtn").classList.toggle("hidden",role!=="owner");
+function profile(){
+ const c=current(),pv=profileVersion||version,r=record(cinemaId,pv),displayedModel=pv===version?model:r?.model_snapshot||history.find(v=>v.version===pv)?.model||model,displayedAnswers=pv===version?answers:r?.responses||{},displayedContext=pv===version?context:r?.profile_snapshot||{},a=window.CinemaScoring.calculate(displayedModel,displayedAnswers,displayedContext);if(!c){$('content').innerHTML='<div class="empty">سینمایی ثبت نشده است.</div>';return;}
+ $('versionLabel').textContent='نسخه ارزیابی '+n(pv);const fields=displayedModel.profileFields||[],p={...c,...displayedContext.profile};const scored=a.categories.filter(s=>s.score!==null),strong=scored.slice().sort((x,y)=>y.score-x.score),weak=scored.slice().sort((x,y)=>x.score-y.score);
+ $('content').innerHTML='<section class="card"><div class="filters">'+selectCinema()+'<label>نسخه ارزیابی<select id="profileVersion">'+[...new Set([version,...records.filter(r=>Number(r.cinema_id)===Number(cinemaId)).map(r=>Number(r.model_version))])].sort((a,b)=>b-a).map(v=>'<option value="'+v+'" '+(v===pv?'selected':'')+'>نسخه '+n(v)+(v===version?' — جاری':' — تاریخچه')+'</option>').join('')+'</select></label><div class="actions"><button class="primary" id="profileEvaluate">ثبت / ادامه ارزیابی</button><button id="downloadProfile">خروجی پروفایل</button></div></div></section><section class="card"><div class="profile-header"><div class="profile-identity"><div class="cinema-icon">▦</div><div><h1>'+h(c.name)+'</h1><p class="muted">'+h(p.province||'')+' · '+h(p.city||'')+'</p><div class="status-line">'+badge(r?.status==='completed'?'ارزیابی نهایی':r?'پیش‌نویس':'بدون ارزیابی',valid(r)?'green':'amber')+badge('نسخه '+n(pv))+(dirty&&pv===version?badge('تغییرات ذخیره‌نشده','amber'):'')+'</div><small class="muted">آخرین ارزیابی: '+date(r?.updated_at)+'</small></div></div><div class="score-ring" style="--p:'+((a.score||0)*20)+'%"><div><strong>'+fmt(a.score)+'</strong><small>از ۵ · '+(r?.status==='completed'&&!dirty?'ثبت نهایی':'موقت')+'</small></div></div></div><hr style="border:0;border-top:1px solid var(--line);margin:22px 0"><div class="detail-grid">'+fields.map(f=>'<div><small>'+h(f.title)+'</small><b>'+h(p[f.id]??'ثبت نشده')+'</b></div>').join('')+'</div></section><div class="grid2"><section class="card"><h2>امتیاز شاخص‌های این سینما</h2>'+a.categories.map(s=>'<div class="axis-row"><div><span>'+h(s.name)+'</span><b>'+fmt(s.score)+' <small>وزن '+n(s.weight*100,1)+'٪</small></b></div><div class="bar"><i style="width:'+((s.score||0)*20)+'%"></i></div></div>').join('')+'</section><section class="card"><h2>جمع‌بندی ارزیابی</h2><div class="axis-row"><div><span>پوشش ردیف‌های مرتبط</span><b>'+n(a.coverage*100,1)+'٪</b></div><div class="bar"><i style="width:'+(a.coverage*100)+'%"></i></div></div><p class="content-note">'+n(a.completed)+' از '+n(a.required)+' ردیف مرتبط تکمیل شده است. '+(a.ready?'پاسخ‌های لازم تکمیل‌اند.':'نتیجه تا تکمیل ارزیابی موقت است.')+'</p><h3>بالاترین امتیازها</h3>'+strong.slice(0,2).map(s=>'<p>'+h(s.name)+' '+badge(fmt(s.score),'green')+'</p>').join('')+'<h3>اولویت بررسی و بهبود</h3>'+weak.slice(0,2).map(s=>'<p>'+h(s.name)+' '+badge(fmt(s.score),'amber')+'</p>').join('')+(a.risk.length?'<div class="notice error">'+n(a.risk.length)+' ردیف حساس نیازمند بررسی است.</div>':'')+'</section></div><section class="card"><h2>جزئیات پارامترها و ردیف‌های ارزیابی</h2>'+a.categories.map(s=>'<details class="group-card"><summary><span>'+h(s.name)+'</span><b>'+fmt(s.score)+'</b></summary><div class="group-body">'+s.groups.map(g=>'<details class="group-card"><summary><span>'+h(g.name)+' · وزن '+n(g.weight*100,1)+'٪</span><b>'+fmt(g.score)+'</b></summary><div class="group-body table-wrap"><table><thead><tr><th>ردیف</th><th>وزن</th><th>امتیاز</th><th>وضعیت / مستند</th></tr></thead><tbody>'+g.items.map(q=>'<tr><td>'+h(q.name)+'</td><td>'+n(q.weight*100,2)+'٪</td><td>'+fmt(q.score)+'</td><td>'+h(q.excluded?q.why:q.score===null?'بررسی نشده':displayedAnswers[q.id]?.evidence||'ارزیابی شده')+'</td></tr>').join('')+'</tbody></table></div></details>').join('')+'</div></details>').join('')+'</section><section class="card"><h2>هشدارها و استثناها</h2>'+(a.risk.map(q=>'<p class="danger">'+h(q.group)+' / '+h(q.name)+' — '+fmt(q.score)+'</p>').join('')||'<p class="muted">هشدار حساس ثبت نشده است؛ این عبارت به معنای تأیید ایمنی تخصصی نیست.</p>')+'<details><summary>ردیف‌های نامرتبط و مرجع ('+n(a.ignored.length)+')</summary>'+a.ignored.map(q=>'<p class="content-note">'+h(q.name)+' — '+h(q.why)+'</p>').join('')+'</details></section><section class="card"><h2>سابقه نسخه‌ها</h2><div class="table-wrap"><table><thead><tr><th>نسخه مدل</th><th>وضعیت</th><th>امتیاز</th><th>زمان ثبت</th><th>جزئیات محفوظ</th></tr></thead><tbody>'+records.filter(r=>Number(r.cinema_id)===Number(cinemaId)).map(r=>'<tr><td>'+n(r.model_version)+'</td><td>'+h(r.status==='completed'?'نهایی':'پیش‌نویس')+'</td><td>'+fmt(r.computed_results?.score)+'</td><td>'+date(r.updated_at)+'</td><td><button class="small-button" data-download-record="'+r.id+'">دریافت ارزیابی و مدل همان نسخه</button></td></tr>').join('')+'</tbody></table></div></section>';
+ $('profileVersion').onchange=e=>{profileVersion=Number(e.target.value);profile();};$('profileEvaluate').onclick=()=>nav('evaluate');$('downloadProfile').onclick=()=>download('cinema-'+cinemaId+'-v'+version+'.json',JSON.stringify({cinema:p,model:displayedModel,answers:displayedAnswers,results:a},null,2));
 }
-function renderNav(){
- const a=calculate();
- E("sectionsNav").innerHTML=model.sections.map(s=>{
-  const cat=a.categories.find(c=>c.id===s.id);
-  const items=cat.groups.flatMap(g=>g.items),need=items.filter(x=>!x.excluded&&s.mode!=="bonus"),done=need.filter(x=>x.score!==null);
-  return '<button class="section-link '+(axis===s.id?"active":"")+'" data-section="'+h(s.id)+'"><span class="section-link-title">'+h(s.name)+'</span><span class="section-link-foot"><span>'+(s.mode==="bonus"?"امتیاز تشویقی":count(done.length)+" / "+count(need.length)+" پاسخ")+'</span><strong>'+(cat.score===null?"—":fmt(cat.score))+'</strong></span><span class="section-progress"><span style="width:'+(need.length?done.length/need.length*100:0)+'%"></span></span></button>';
- }).join("");
+function rating(v){let out='<option value="">بررسی نشده</option>';for(let i=0;i<=20;i++){const x=i/4;out+='<option value="'+x+'" '+(v!==null&&v!==undefined&&v!==''&&Number(v)===x?'selected':'')+'>'+n(x,x%1?2:0)+' از ۵</option>';}return out;}
+function rubric(q){if(!q.rubric)return '<p class="content-note">'+(q.source?'در سند برای این ردیف، شرح تفصیلی نمره‌های صفر تا پنج تعیین نشده است.':'راهنمای امتیازدهی این ردیف هنوز تعریف نشده است.')+'</p>';const r=typeof q.rubric==='object'?Object.entries(q.rubric).sort((a,b)=>Number(b[0])-Number(a[0])).map(([k,v])=>'<p><b>'+h(k)+':</b> '+h(v)+'</p>').join(''):h(q.rubric).replace(/\n/g,'<br>');return '<details><summary>راهنمای امتیازدهی</summary><div class="content-note">'+r+'</div></details>';}
+function evaluate(){
+ if(!current()){$('content').innerHTML='<div class="empty">سینمایی برای ارزیابی وجود ندارد.</div>';return;}if(!axis||!model.sections.some(s=>s.id===axis))axis=model.sections[0]?.id;const s=model.sections.find(s=>s.id===axis),a=calc();
+ $('content').innerHTML='<section class="card"><div class="filters">'+selectCinema()+'<label>شاخص ارزیابی<select id="axisPicker">'+model.sections.map(s=>'<option value="'+s.id+'" '+(axis===s.id?'selected':'')+'>'+h(s.name)+'</option>').join('')+'</select></label><button id="openProfile">مشاهده پروفایل سینما</button></div><p class="content-note">ردیف‌های جدول مطابق سند هستند. نمره صفر یعنی ضعف واقعی؛ بررسی‌نشده و نامرتبط دو وضعیت جدا هستند. فرمول در هر سطح: مجموع (امتیاز × وزن) ÷ مجموع وزن‌های مرتبط.</p></section><div class="summary-strip"><div><strong id="liveScore">'+fmt(a.score)+'</strong> <small>از ۵</small><p id="liveCoverage">'+n(a.completed)+' از '+n(a.required)+' ردیف مرتبط · پوشش '+n(a.coverage*100,1)+'٪</p></div><div><span id="dirtyLabel" class="badge '+(dirty?'amber':'')+'">'+(dirty?'تغییرات ذخیره‌نشده':'ذخیره‌شده')+'</span><p id="liveStatus">'+(a.ready?'پاسخ‌ها کامل؛ قابل نهایی‌سازی':'امتیاز موقت؛ ارزیابی کامل نشده')+'</p></div><div class="actions"><button id="saveDraft" '+(busy?'disabled':'')+'>ذخیره پیش‌نویس</button><button id="saveFinal" class="primary" '+(busy||!a.ready?'disabled':'')+'>ثبت نهایی ارزیابی</button></div></div><details class="card"><summary>مشخصات و ظرفیت سینما — اطلاعات پروفایل این ارزیابی</summary><p class="content-note">این اطلاعات با ارزیابی ذخیره می‌شوند؛ امتیازهای قدیمی و اطلاعات پایه داشبورد قبلی بازنویسی نمی‌شوند.</p><div class="field-grid">'+(model.profileFields||[]).map(f=>'<label>'+h(f.title)+'<input class="profile-field" data-field="'+h(f.id)+'" type="'+(f.type==='number'?'number':'text')+'" '+(f.type==='number'?'min="0"':'')+' value="'+h(context.profile?.[f.id]??current()?.[f.id]??'')+'"></label>').join('')+'</div></details><div class="section-head"><div><h2>'+h(s?.name||'')+'</h2><p class="content-note">'+h(s?.description||'')+'</p></div><span class="badge">وزن شاخص '+n((s?.weight||0)*100,1)+'٪</span></div><div id="evaluationGroups">'+(s?.groups||[]).map((g,i)=>{const gr=a.categories.find(c=>c.id===s.id)?.groups.find(x=>x.id===g.id);return '<details class="group-card" '+(i===0?'open':'')+'><summary><span>'+h(g.name)+' <small class="muted">· وزن '+n(g.weight*100,1)+'٪</small></span><b class="table-score" data-group-score="'+g.id+'">'+fmt(gr?.score)+'</b></summary><div class="group-body"><p class="content-note">'+h(g.description)+'</p><div class="table-wrap"><table class="criteria"><thead><tr><th>ردیف و نحوه بررسی</th><th>معیار ارزیابی</th><th>وزن ردیف</th><th>امتیاز کارشناس</th><th>توضیح و مستند</th></tr></thead><tbody>'+g.questions.map((q,j)=>{const ans=answers[q.id]||{},ref=q.tag==='reference',info=q.type==='info';return '<tr><td data-label="ردیف و نحوه بررسی"><span class="criterion-number">'+n(j+1)+(q.source?' · جدول '+n(q.source.table)+'، ردیف '+n(q.source.row):' · ردیف افزوده‌شده')+'</span><b>'+h(q.name)+'</b>'+(q.tag==='critical'?' '+badge('حساس','red'):'')+'<div class="method">'+h(q.method)+'</div>'+(q.note?'<p class="content-note">'+h(q.note)+'</p>':'')+'</td><td data-label="معیار ارزیابی">'+rubric(q)+'</td><td data-label="وزن ردیف">'+n(q.weight*100,2)+'٪'+(ref?'<p>'+badge('مرجع')+'</p>':info?'<p>'+badge('اطلاعاتی')+'</p>':'')+'</td><td data-label="امتیاز کارشناس">'+(ref?'<p class="content-note">بدون امتیاز مستقل؛ محل اصلی: '+h(q.referenceTo||'ارجاع ثبت‌شده')+'</p>':info?'<p class="content-note">فقط ثبت اطلاعات</p>':'<select class="answer-score" data-question="'+q.id+'" '+(ans.na?'disabled':'')+' aria-label="امتیاز '+h(q.name)+'">'+rating(ans.score)+'</select><label><input type="checkbox" class="answer-na" data-question="'+q.id+'" '+(ans.na?'checked':'')+'> نامرتبط (N/A)</label><input class="answer-reason '+(ans.na?'':'hidden')+'" data-question="'+q.id+'" value="'+h(ans.note||'')+'" placeholder="دلیل نامرتبط؛ حداقل ۸ نویسه">')+'</td><td data-label="توضیح و مستند"><textarea class="answer-evidence" data-question="'+q.id+'" placeholder="مشاهده کارشناس / نشانی مستند">'+h(ans.evidence||'')+'</textarea></td></tr>';}).join('')+'</tbody></table></div></div></details>';}).join('')+'</div><section class="card"><h3>محاسبه زنده شاخص‌ها</h3><div id="liveAxes">'+liveAxes(a)+'</div><div class="formula">Parameter = Σ(row score × row weight) / Σ(active row weights)</div><p class="content-note">برای شاخص و سینما همین فرمول با وزن پارامترها و وزن شاخص‌ها اعمال می‌شود. تعداد ردیف‌های یک جدول به‌تنهایی وزن پارامتر را زیاد نمی‌کند.</p><div id="liveWarnings"></div></section>';
+ $('axisPicker').onchange=e=>{axis=e.target.value;evaluate();};$('openProfile').onclick=()=>nav('profile');$('saveDraft').onclick=()=>save('draft');$('saveFinal').onclick=()=>save('completed');
+ $('content').querySelectorAll('.answer-score,.answer-na,.answer-reason,.answer-evidence,.profile-field').forEach(el=>{
+ el.addEventListener(el.classList.contains('answer-score')||el.classList.contains('answer-na')?'change':'input',e=>{const t=e.target;if(t.classList.contains('profile-field')){context.profile=context.profile||{};context.profile[t.dataset.field]=t.value;change();return;}const id=t.dataset.question,ans=answers[id]||{score:null,na:false,note:''};
+ if(t.classList.contains('answer-score'))ans.score=t.value===''?null:Number(t.value);if(t.classList.contains('answer-na')){ans.na=t.checked;const row=t.closest('tr');row.querySelector('.answer-score').disabled=t.checked;row.querySelector('.answer-reason').classList.toggle('hidden',!t.checked);}if(t.classList.contains('answer-reason'))ans.note=t.value;if(t.classList.contains('answer-evidence'))ans.evidence=t.value;answers[id]=ans;change();updateLive();});});updateLive();
 }
-function renderGroups(){
- if(tab!=="evaluate")return;
- const section=model.sections.find(s=>s.id===axis)||model.sections[0];const a=calculate(),cat=a.categories.find(c=>c.id===section.id);
- E("pageMainTitle").textContent=section.name;
- E("pageMainNote").textContent=section.mode==="bonus"?"این امکانات جداگانه و تشویقی‌اند. نبود آن‌ها از امتیاز کیفیت پایه کم نمی‌کند.":"سؤال‌های هر زیرشاخص از سند مبنا آمده‌اند؛ معیار نامرتبط را با دلیل کنار بگذارید و صفر را برای ضعف واقعی ثبت کنید.";
- E("evaluatePane").classList.remove("hidden");E("reportPane").classList.add("hidden");
- E("groupsWrap").innerHTML=section.groups.map((g,index)=>{
-  const res=cat.groups.find(x=>x.id===g.id);
-  const bonus=section.mode==="bonus";
-  const available=String(context.amenities[g.id]||"unknown");
-  const amenityUI=bonus?'<div class="availability"><label>وضعیت وجود این امکان</label><select class="amenity-select" data-group="'+h(g.id)+'"><option value="unknown" '+(available==="unknown"?"selected":"")+'>هنوز بررسی نشده</option><option value="yes" '+(available==="yes"?"selected":"")+'>موجود است</option><option value="no" '+(available==="no"?"selected":"")+'>وجود ندارد (بدون جریمه)</option></select></div>':"";
-  const parkUI=g.id==="parking"?'<div class="note-box"><b>ارزیابی کفایت نیاز پارک</b><p>یک نتیجه واحد؛ ظرفیت‌های مجزا و قابل استفاده در اوج مراجعه را ثبت کنید. ظرفیت مشترک را دوبار نشمارید. فاصله و ایمنی مسیر در شواهد ثبت شود. فرمول ظرفیت صرفاً ابزار پیشنهادی کفایت است؛ اگر کیفیت دسترسی مناسب نیست، تأیید خودکار را بردارید و نتیجه را با توضیح ارزیابی کنید.</p><div class="modal-grid">'+[['demand','نیاز برآوردی (خودرو)'],['own','ظرفیت اختصاصی قابل استفاده'],['public','ظرفیت عمومی قابل استفاده'],['street','ظرفیت مجاز خیابانی']].map(([k,t])=>'<label>'+t+'<input type="number" min="0" step="1" class="parking-input" data-field="'+k+'" value="'+h(context.parking?.[k]??'')+'"></label>').join('')+'</div><label><input type="checkbox" id="parkingVerified" '+(context.parking?.verified?'checked':'')+'> منابع ظرفیت مجزا، ایمن و قابل استفاده‌اند؛ محاسبه خودکار کفایت فعال شود</label><p>امتیاز = ۵ × حداقلِ (۱، مجموع ظرفیت مؤثر ÷ نیاز). نتیجه: '+(window.CinemaScoring.parking(context.parking)===null?'ورودی کامل و تأیید لازم است؛ امتیاز نتیجه‌محور دستی قابل ثبت است':fmt(window.CinemaScoring.parking(context.parking)))+'</p></div>':"";
-  const notes=g.sourceInfo?.length?'<details class="rubric" style="margin-bottom:14px"><summary>جزئیات پشتیبان سند و موارد هم‌پوشان ('+count(g.sourceInfo.length)+')</summary><div class="rubric-list">'+g.sourceInfo.map(x=>'<div style="padding:8px 0;border-top:1px solid #edf1f0"><b>'+h(x.title)+'</b><div>'+h(x.method||"")+'</div><textarea class="support-input" data-support="'+h(x.id)+'" placeholder="ثبت داده پشتیبان؛ بدون امتیاز مستقل">'+h(context.support?.[x.id]||'')+'</textarea>'+optionsChecklist(x.sourceRubric||x.rubric)+(x.id==="access_info_metro"&&context.metro==="no"?'<span style="color:#19836f">نامرتبط به دلیل نبود مترو</span>':"")+'</div>').join("")+'</div></details>':"";
-  const qHtml=g.mode==="reference"?'<details><summary>ردیف‌های ارجاعی سند (بدون امتیاز مستقل)</summary>'+g.questions.map(q=>'<p><b>'+h(q.name)+'</b> '+h(q.method)+'</p>'+optionsChecklist(q.rubric)).join('')+'</details><p class="reference-note">برای جلوگیری از دوباره‌شماری، موارد این زیرشاخص فقط در محور ایمنی امتیاز می‌گیرند. جزئیات ردیف‌ها در سند اصلی باقی مانده‌اند.</p>':
-   g.questions.map((q,i)=>{
-    const answer=answers[q.id]||{},rule=activeRule(q,g,section);
-    const exclude=!rule.yes||!!answer.na;
-    const crit=q.tag==="critical"; const auto=q.id==="parking_outcome"&&window.CinemaScoring.parking(context.parking)!==null;
-    const qvalue=auto?window.CinemaScoring.parking(context.parking):answer.na?null:answer.score;
-    const desc=q.method?'<div class="detail-row"><b>نحوه بررسی: </b>'+h(q.method)+'</div>':"";
-    const rubric=q.rubric?'<details class="rubric"><summary>معیار امتیازدهی ۰ تا ۵</summary>'+optionsChecklist(q.rubric)+'</details>':"";
-    return '<div class="question '+(exclude?"question-off":"")+'" data-qid="'+h(q.id)+'"><div class="question-top"><div class="question-caption"><span class="question-count">'+count(i+1)+'</span><span>'+h(q.name)+'</span>'+(crit?'<span class="risk-tag">حساس</span>':"")+'</div><div class="question-actions"><label>امتیاز <select class="score-select" data-question="'+h(q.id)+'" '+(exclude||auto?"disabled":"")+'>'+ratingOptions(qvalue)+'</select></label></div></div>'+(rule.yes?'<div class="q-footer"><label class="na-control"><input class="na-toggle" data-question="'+h(q.id)+'" type="checkbox" '+(answer.na?"checked":"")+' '+(q.tag==="primary"?"disabled":"")+'>نامرتبط (N/A)</label><input class="na-note '+(answer.na?"":"hidden")+'" data-question="'+h(q.id)+'" type="text" placeholder="دلیل دقیق نامرتبط بودن..." value="'+h(answer.note||"")+'"></div>':'<div class="excluded-info">مستثنا: '+h(rule.why)+'</div>')+desc+(q.origin==='draft_proposed'?'<p class="rule-hint">قاعده پیشنهادی طراحی؛ نیازمند تأیید</p>':'')+rubric+'<textarea class="row-evidence" data-question="'+h(q.id)+'" placeholder="توضیح و نشانی مستند این ردیف">'+h(answer.evidence||'')+'</textarea><p class="quiet">وزن ردیف: '+fmt(q.weight)+' · '+(auto?'محاسبه خودکار ظرفیت':'ثبت توسط ارزیاب')+'</p></div>';
-   }).join("");
-  return '<article class="group-card" id="group-'+h(g.id)+'"><div class="group-head"><div><span class="eyebrow">زیرشاخص '+count(index+1)+'</span><h3>'+h(g.name)+'</h3></div><div class="group-score">'+(res.score===null?"—":fmt(res.score))+' <small>/ ۵</small></div></div>'+amenityUI+parkUI+qHtml+notes+'<label class="detail-row">توضیحات و شواهد پارامتر<textarea class="group-evidence" data-group="'+h(g.id)+'" placeholder="شرح مشاهده، تاریخ بازدید و نشانی مستندات">'+h(context.evidence?.[g.id]||'')+'</textarea></label></article>';
- }).join("");
+function liveAxes(a){return '<div class="grid3">'+a.categories.map(s=>'<div class="axis-row"><div><span>'+h(s.name)+'</span><b>'+fmt(s.score)+'</b></div><div class="bar"><i style="width:'+((s.score||0)*20)+'%"></i></div></div>').join('')+'</div>';}
+function updateLive(){if(route!=='evaluate')return;const a=calc();$('liveScore').textContent=fmt(a.score);$('liveCoverage').textContent=n(a.completed)+' از '+n(a.required)+' ردیف مرتبط · پوشش '+n(a.coverage*100,1)+'٪';$('liveStatus').textContent=a.ready?'پاسخ‌ها کامل؛ قابل نهایی‌سازی':'امتیاز موقت؛ ارزیابی کامل نشده';$('saveDraft').disabled=busy;$('saveFinal').disabled=busy||!a.ready;$('liveAxes').innerHTML=liveAxes(a);for(const s of a.categories)for(const g of s.groups){const el=document.querySelector('[data-group-score="'+g.id+'"]');if(el)el.textContent=fmt(g.score);}$('liveWarnings').innerHTML=a.risk.length?'<div class="notice error">'+n(a.risk.length)+' ردیف حساس با نمره '+n(model.policy.criticalFloor)+' یا کمتر ثبت شده است.'+(model.policy.criticalCapEnabled?' سقف امتیاز فعال است.':' هشدار مستقل از میانگین است؛ سقف امتیاز غیرفعال است.')+'</div>':'';}
+async function save(status){if(busy||!user||!cinemaId)return;const a=calc();if(status==='completed'&&!a.ready){toast('تمام ردیف‌های مرتبط باید ارزیابی شوند؛ دلیل N/A نیز معتبر باشد.',true);return;}const invalid=Object.values(answers).some(a=>a.na&&(!a.note||a.note.trim().length<8));if(invalid){toast('برای نامرتبط بودن دلیل حداقل ۸ نویسه‌ای لازم است.',true);return;}if(status==='completed'&&a.risk.length&&!confirm('هشدار حساس ثبت شده است. ارزیابی با همین هشدار نهایی شود؟'))return;busy=true;updateLive();
+ try{const now=new Date().toISOString(),payload={cinema_id:cinemaId,model_id:ID,model_version:version,model_snapshot:tools.snapshot(model),responses:answers,profile_snapshot:context,computed_results:{score:a.score,raw:a.raw,coverage:a.coverage,risk:a.risk,exclusions:a.ignored,categoryScores:a.categories},status,updated_by:user.id,updated_at:now,completed_at:status==='completed'?now:null};
+ const q=lastRecord?db.from('cinema_scoring_assessments').update(payload).eq('id',lastRecord.id).eq('updated_at',lastRecord.updated_at):db.from('cinema_scoring_assessments').insert(payload);const {data,error}=await q.select('id');if(error)throw error;if(!data?.length)throw new Error('این ارزیابی همزمان تغییر کرده است؛ تغییرات را نگه دارید و اطلاعات را بازخوانی کنید.');await readRecords();lastRecord=record(cinemaId);dirty=false;toast(status==='completed'?'ارزیابی نهایی ثبت شد؛ رتبه‌بندی به‌روز شد.':'پیش‌نویس ذخیره شد.');if($('dirtyLabel'))$('dirtyLabel').textContent='ذخیره‌شده';
+ }catch(e){toast('ذخیره انجام نشد: '+e.message,true);}finally{busy=false;updateLive();}}
+function download(name,text,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+let history=[];let profileVersion=null;
+const tools=window.CinemaModelTools;
+function textRubric(q){return typeof q.rubric==='object'?Object.entries(q.rubric).sort((a,b)=>b[0]-a[0]).map(([k,v])=>k+': '+v).join('\n'):q.rubric||'';}
+function editorField(label,field,value,si,gi='',qi='',type='text',extra=''){return '<label>'+label+'<'+(type==='textarea'?'textarea':'input')+' data-edit="'+field+'" data-s="'+si+'" data-g="'+gi+'" data-q="'+qi+'" '+(type==='textarea'?'':'type="'+type+'" value="'+h(value)+'"')+' '+extra+'>'+(type==='textarea'?h(value)+'</textarea>':'')+'</label>';}
+function schema(){if(role!=='owner')return;editor=editor||clone(model);const errors=tools.validate(editor);
+ $('content').innerHTML='<section class="card"><div class="section-head"><div><h2>ساختار نظام ارزیابی</h2><p class="muted">شاخص ← پارامتر ← جدول و ردیف ارزیابی</p></div><div class="actions"><button id="addSection">+ افزودن شاخص</button><button id="normalizeWeights">تنظیم مجموع وزن‌ها روی ۱</button><button id="exportModel">دریافت مدل کامل</button></div></div><div class="notice">وزن ردیف‌ها در هر پارامتر، وزن پارامترها در هر شاخص و وزن شاخص‌ها در امتیاز کل مستقل‌اند. جمع وزن‌های هر مجموعه باید ۱ باشد. دکمه تنظیم مجموع، نسبت وزن‌های واردشده را حفظ و آن‌ها را نرمال می‌کند؛ وزن برابر فقط وقتی اعمال می‌شود که همه وزن‌های آن مجموعه صفر باشند.</div><p class="content-note">ردیف‌های مرجع و اطلاعاتی وزن صفر دارند و امتیاز مستقل نمی‌گیرند. تغییر نوع آن‌ها به «امتیازی» ممکن است باعث دوباره‌شماری شود؛ راهنمای سند و جایگاه اصلی را بررسی کنید.</p><div class="summary-strip"><span id="editorStatus">'+(errors.length?badge(n(errors.length)+' خطای وزن یا ساختار','red'):badge('ساختار و مجموع وزن‌ها معتبر است','green'))+'</span><span id="editorTotals" class="sum-label">مجموع وزن شاخص‌ها: '+n(editor.sections.reduce((a,s)=>a+Number(s.weight),0),4)+'</span><button id="saveModel" class="primary" '+(busy?'disabled':'')+'>ذخیره به‌عنوان نسخه جدید</button></div><div id="schemaErrors" class="notice error '+(errors.length?'':'hidden')+'">'+errors.slice(0,8).map(h).join('<br>')+'</div><label>شرح تغییرات این نسخه<input id="versionNote" value="'+h(editor.versionNote||'')+'" placeholder="مثلاً اصلاح وزن تجهیزات فنی و اضافه‌کردن معیار…"></label></section><div id="schemaTree">'+editor.sections.map((s,si)=>'<section class="editor-section"><div class="editor-heading">'+editorField('عنوان شاخص','name',s.name,si)+editorField('وزن شاخص (۰ تا ۱)','weight',s.weight,si,'','','number','min="0" max="1" step="any"')+'<div class="actions"><button class="small-button" data-add-group="'+si+'">+ پارامتر</button><button class="small-button" data-move="s" data-s="'+si+'" data-dir="-1">↑</button><button class="small-button" data-move="s" data-s="'+si+'" data-dir="1">↓</button><button class="small-button danger-button" data-remove-section="'+si+'">حذف شاخص</button></div></div><details style="margin-top:12px"><summary>توضیح و مرزبندی شاخص</summary>'+editorField('توضیح شاخص','description',s.description,si,'','','textarea')+'</details>'+s.groups.map((g,gi)=>'<details class="editor-group"><summary><b>'+h(g.name)+'</b> <small class="muted">· '+n(g.questions.length)+' ردیف · وزن '+n(g.weight*100,2)+'٪</small></summary><div class="editor-heading" style="margin-top:15px">'+editorField('عنوان پارامتر / جدول','name',g.name,si,gi)+editorField('وزن پارامتر','weight',g.weight,si,gi,'','number','min="0" max="1" step="any"')+'<div class="actions"><button class="small-button" data-add-row="'+si+','+gi+'">+ ردیف</button><button class="small-button" data-move="g" data-s="'+si+'" data-g="'+gi+'" data-dir="-1">↑</button><button class="small-button" data-move="g" data-s="'+si+'" data-g="'+gi+'" data-dir="1">↓</button><button class="small-button danger-button" data-remove-group="'+si+','+gi+'">حذف پارامتر</button></div></div>'+editorField('توضیح پارامتر','description',g.description,si,gi,'','textarea')+'<p class="sum-label">مجموع وزن ردیف‌های امتیازی: '+n(g.questions.filter(tools.active).reduce((a,q)=>a+Number(q.weight),0),4)+'</p>'+g.questions.map((q,qi)=>'<details class="editor-row"><summary>'+n(qi+1)+'. '+h(q.name)+' <small class="muted">· '+n(q.weight*100,2)+'٪</small></summary><div class="field-grid" style="margin-top:13px">'+editorField('عنوان ردیف ارزیابی','name',q.name,si,gi,qi)+'<label>نوع ردیف<select data-edit="type" data-s="'+si+'" data-g="'+gi+'" data-q="'+qi+'">'+[['scored','امتیازی'],['reference','مرجع؛ بدون امتیاز مستقل'],['info','اطلاعاتی']].map(([v,t])=>'<option value="'+v+'" '+((q.type||'scored')===v?'selected':'')+'>'+t+'</option>').join('')+'</select></label>'+editorField('وزن ردیف','weight',q.weight,si,gi,qi,'number','min="0" max="1" step="any"')+'</div><div class="field-grid" style="margin-top:10px">'+editorField('نحوه بررسی و ثبت','method',q.method,si,gi,qi,'textarea')+editorField('معیار و راهنمای امتیازدهی','rubric',textRubric(q),si,gi,qi,'textarea')+editorField('یادداشت / دلیل مرجع بودن','note',q.note,si,gi,qi,'textarea')+'</div><div class="actions"><label><input type="checkbox" data-edit="critical" data-s="'+si+'" data-g="'+gi+'" data-q="'+qi+'" '+(q.tag==='critical'?'checked':'')+'> ردیف حساس؛ هشدار مستقل</label><button class="small-button" data-move="q" data-s="'+si+'" data-g="'+gi+'" data-q="'+qi+'" data-dir="-1">↑</button><button class="small-button" data-move="q" data-s="'+si+'" data-g="'+gi+'" data-q="'+qi+'" data-dir="1">↓</button><button class="small-button danger-button" data-remove-row="'+si+','+gi+','+qi+'">حذف ردیف</button></div>'+(q.source?'<p class="content-note">منبع محفوظ: جدول '+n(q.source.table)+'، ردیف '+n(q.source.row)+'</p>':'')+'</details>').join('')+'</details>').join('')+'</section>').join('')+'</div><section class="card"><h2>قواعد هشدار و سقف امتیاز</h2><p class="content-note">این تنظیمات پیشنهاد مدیریتی‌اند و وزن‌دهی سه سطح را تغییر نمی‌دهند. هشدار حساس مستقل از میانگین نمایش داده می‌شود.</p><div class="field-grid"><label>آستانه هشدار حساس (۰ تا ۵)<input id="criticalFloor" type="number" min="0" max="5" step=".25" value="'+editor.policy.criticalFloor+'"></label><label>سقف امتیاز در صورت هشدار<input id="criticalCap" type="number" min="0" max="5" step=".01" value="'+editor.policy.criticalCap+'"></label><label>اعمال سقف<select id="criticalCapEnabled"><option value="no" '+(!editor.policy.criticalCapEnabled?'selected':'')+'>غیرفعال؛ فقط هشدار</option><option value="yes" '+(editor.policy.criticalCapEnabled?'selected':'')+'>فعال</option></select></label></div></section><section class="card"><h2>سند مبنا و تاریخچه ساختار</h2><button id="showSource" class="small-button">مشاهده جداول اصلی سند</button><div id="sourceTables" class="hidden"></div><p class="content-note">حذف یا تغییر ردیف در مدل جدید، متن آرشیو سند یا ارزیابی‌های نسخه‌های قبلی را تغییر نمی‌دهد.</p>'+history.map(v=>'<p class="content-note">نسخه '+n(v.version)+' · '+date(v.saved_at)+' · '+h(v.note||'')+' <button class="small-button" data-history-export="'+v.version+'">دریافت مدل همان نسخه</button></p>').join('')+'</section>';
+ $('addSection').onclick=()=>{editor.sections.push({id:uid('axis'),name:'شاخص جدید',description:'',weight:0,groups:[newGroup()]});schema();};$('normalizeWeights').onclick=()=>{tools.normalize(editor);schema();toast('مجموع وزن‌ها در هر سه سطح تنظیم شد. هنوز نسخه جدید ذخیره نشده است.');};$('exportModel').onclick=()=>download('cinema-model-v'+version+'.json',JSON.stringify(editor,null,2));$('saveModel').onclick=saveModel;$('versionNote').oninput=e=>editor.versionNote=e.target.value;
+ ['criticalFloor','criticalCap'].forEach(id=>$(id).oninput=e=>{editor.policy[id]=e.target.value===''?null:Number(e.target.value);});$('criticalCapEnabled').onchange=e=>editor.policy.criticalCapEnabled=e.target.value==='yes';
+ $('showSource').onclick=()=>{const box=$('sourceTables');box.classList.toggle('hidden');if(!box.innerHTML)box.innerHTML=(model.sourceArchive?.tables||[]).map(t=>'<details class="editor-group"><summary>جدول '+n(t.table)+'</summary><div class="table-wrap"><table>'+t.rows.map(row=>'<tr>'+row.map(c=>'<td>'+h(c).replace(/\n/g,'<br>')+'</td>').join('')+'</tr>').join('')+'</table></div></details>').join('');};
+ $('schemaTree').oninput=editInput;$('schemaTree').onchange=e=>{if(e.target.matches('select,input[type=checkbox]'))editInput(e);};
+ $('schemaTree').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.addGroup!==undefined){editor.sections[Number(b.dataset.addGroup)].groups.push(newGroup());schema();}
+ if(b.dataset.addRow){const [s,g]=b.dataset.addRow.split(',').map(Number);editor.sections[s].groups[g].questions.push(newRow());schema();}
+ if(b.dataset.removeSection!==undefined){const i=Number(b.dataset.removeSection);if(confirm('شاخص «'+editor.sections[i].name+'» و پارامترهای آن از نسخه جدید حذف شوند؟')){editor.sections.splice(i,1);schema();}}
+ if(b.dataset.removeGroup){const [s,g]=b.dataset.removeGroup.split(',').map(Number);if(confirm('این پارامتر و جدول آن از نسخه جدید حذف شوند؟')){editor.sections[s].groups.splice(g,1);schema();}}
+ if(b.dataset.removeRow){const [s,g,q]=b.dataset.removeRow.split(',').map(Number);if(confirm('این ردیف از نسخه جدید حذف شود؟')){editor.sections[s].groups[g].questions.splice(q,1);schema();}}
+ if(b.dataset.move){const si=Number(b.dataset.s),gi=Number(b.dataset.g),qi=Number(b.dataset.q),kind=b.dataset.move,arr=kind==='s'?editor.sections:kind==='g'?editor.sections[si].groups:editor.sections[si].groups[gi].questions,i=kind==='s'?si:kind==='g'?gi:qi,j=i+Number(b.dataset.dir);if(j>=0&&j<arr.length){[arr[i],arr[j]]=[arr[j],arr[i]];schema();}}
+ };
 }
-function renderSummary(){
- const a=calculate();for(const c of a.categories)for(const g of c.groups){const el=document.querySelector("#group-"+g.id+" .group-score");if(el)el.innerHTML=(g.score===null?"—":fmt(g.score))+" <small>/ ۵</small>";}const cv=Math.round(a.coverage*100);
- E("scoreNumber").textContent=a.score===null?"—":fmt(a.score);
- E("scoreCaption").textContent=a.ready?(a.risk.length?"ارزیابی کامل با هشدار ایمنی":"پاسخ‌ها کامل؛ قابل ارائه"):"امتیاز موقت؛ هنوز همه معیارها بررسی نشده‌اند";
- E("scoreStatus").textContent=a.ready?(a.risk.length?"خطر جدی ثبت شده":"قابل ارائه"):"در حال تکمیل";
- E("scoreStatus").className="status-pill "+(a.ready&&a.risk.length?"bad":a.ready?"good":"muted");
- E("scoreRing").style.setProperty("--p",Math.max(0,Math.round((a.score||0)*20))+"%");
- E("coverageNumber").textContent=count(cv)+"٪";
- E("coverageBar").style.width=cv+"%";
- E("coveredCount").textContent=count(a.completed)+" از "+count(a.required)+" معیار اصلی";
- E("rawScore").textContent=a.raw===null?"—":fmt(a.raw);
- E("bonusScore").textContent="+"+fmt(a.bonus);
- E("capAlert").classList.toggle("hidden",!a.risk.length);
- E("capAlertText").textContent=a.risk.length?count(a.risk.length)+" مورد حساس نمره "+model.policy.criticalFloor+" یا کمتر دارد؛ "+(model.policy.criticalCapEnabled?"سقف امتیاز "+model.policy.criticalCap+" اعمال می‌شود.":"هشدار مستقل فعال است؛ محدودکردن امتیاز غیرفعال است.")+"":"";
- E("saveDraft").disabled=busy||!currentId;
- E("saveComplete").disabled=busy||!currentId||!a.ready;
- E("scoreCategories").innerHTML=a.categories.filter(x=>!x.bonus).map(x=>'<div class="compact-row"><span>'+h(x.name)+'</span><b>'+(x.score===null?"—":fmt(x.score))+'</b><span class="mini-bar"><i style="width:'+((x.score||0)*20)+'%"></i></span></div>').join("");
+function uid(prefix){return prefix+'_'+Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');}
+function newRow(){return {id:uid('row'),name:'ردیف جدید',method:'',rubric:'',weight:1,type:'scored',tag:'',required:true,origin:'owner_defined'};}
+function newGroup(){return {id:uid('param'),name:'پارامتر جدید',description:'',weight:1,mode:'normal',questions:[newRow()]};}
+function editInput(e){const t=e.target;if(!t.dataset.edit)return;const si=Number(t.dataset.s),gi=t.dataset.g===''?null:Number(t.dataset.g),qi=t.dataset.q===''?null:Number(t.dataset.q),obj=gi===null?editor.sections[si]:qi===null?editor.sections[si].groups[gi]:editor.sections[si].groups[gi].questions[qi],key=t.dataset.edit;
+ if(key==='critical'){if(obj.type!=='scored'){t.checked=false;toast('هشدار حساس را برای ردیف امتیازی تعیین کنید.',true);return;}obj.tag=t.checked?'critical':obj.type==='reference'?'reference':'';}else if(key==='type'){obj.type=t.value;obj.tag=t.value==='reference'?'reference':obj.tag==='critical'?'critical':'';obj.required=t.value==='scored';if(t.value!=='scored')obj.weight=0;const weightEl=t.closest('.editor-row')?.querySelector('[data-edit=weight]');if(weightEl)weightEl.value=obj.weight;}else obj[key]=key==='weight'?(t.value===''?null:Number(t.value)):t.value;
+ const errs=tools.validate(editor);$('editorStatus').innerHTML=errs.length?badge(n(errs.length)+' خطای وزن یا ساختار','red'):badge('ساختار معتبر؛ تغییرات ذخیره‌نشده','green');$('editorTotals').textContent='مجموع وزن شاخص‌ها: '+n(editor.sections.reduce((a,s)=>a+Number(s.weight),0),4);$('schemaErrors').innerHTML=errs.slice(0,8).map(h).join('<br>');$('schemaErrors').classList.toggle('hidden',!errs.length);
 }
-function renderAudit(){
- const a=calculate();
- E("auditCounts").innerHTML='<span>'+count(a.ignored.length)+' استثنا</span><span>'+count(a.missing.length)+' ناقص</span><span>'+count(a.risk.length)+' هشدار ایمنی</span>';
- E("auditList").innerHTML=[
-  ...a.risk.map(x=>'<div class="audit-line audit-danger"><b>خطر حساس</b><span>'+h(x.name)+'</span><strong>'+fmt(x.score)+'</strong></div>'),
-  ...a.ignored.slice(0,70).map(x=>'<div class="audit-line"><b>استثنا</b><span>'+h(x.name)+": "+h(x.why)+'</span></div>'),
-  ...a.missing.slice(0,35).map(x=>'<div class="audit-line audit-pending"><b>ناقص</b><span>'+h(x.name)+'</span></div>')
- ].join("")||'<p class="quiet">استثنا یا هشدار فعالی وجود ندارد.</p>';
-}
-function report(){
- const a=calculate(),c=cinemas.find(c=>c.id===currentId);
- tab="report";E("evaluateLink").classList.remove("active");E("reportLink").classList.add("active");
- E("evaluatePane").classList.add("hidden");E("reportPane").classList.remove("hidden");
- E("pageMainTitle").textContent="گزارش ارزیابی "+(c?.name||"");
- E("pageMainNote").textContent="امتیاز پایه، پاداش، شرط ایمنی و فهرست کامل استثناها، به‌صورت قابل ردیابی.";
- E("reportCards").innerHTML=[
- ["امتیاز پایه",a.raw===null?"—":fmt(a.raw)],
- ["امتیاز تشویقی","+"+fmt(a.bonus)],
- ["امتیاز نهایی مشروط",a.score===null?"—":fmt(a.score)],
- ["پوشش معیارها",count(Math.round(a.coverage*100))+"٪"]
- ].map(([t,v])=>'<div class="report-stat"><span>'+h(t)+'</span><strong>'+h(v)+'</strong></div>').join("");
- E("reportCategories").innerHTML=a.categories.map(x=>'<div class="report-category"><div><b>'+h(x.name)+'</b><small>'+(x.bonus?"تشویقی (بدون کسر از پایه)":"وزن پیشنهادی "+count(Math.round(x.weight*100))+"٪")+'</small></div><strong>'+(x.score===null?"—":fmt(x.score))+'</strong><div class="report-bar"><i style="width:'+((x.score||0)*20)+'%"></i></div>'+x.groups.map(g=>'<div class="report-sub"><span>'+h(g.name)+' · وزن '+fmt(g.weight)+'</span><b>'+(g.score===null?"—":fmt(g.score))+'</b></div>').join("")+'</div>').join("");
- const notes=(model.reviewNotes||[]).map(x=>'<p class="muted-text"><b>'+h(x.title)+":</b> "+h(x.detail)+'</p>').join("");
- const ranked=records.filter(r=>Number(r.model_version)===modelVersion&&r.status==='completed'&&r.computed_results?.coverage===1).sort((a,b)=>(b.computed_results.score??-1)-(a.computed_results.score??-1));
- E("reportCategories").insertAdjacentHTML('beforeend','<article class="group-card"><h3>مقایسه ارزیابی‌های نهایی همین نسخه</h3>'+ (ranked.map((r,i)=>'<div class="report-sub"><span>'+count(i+1)+' · '+h(cinemas.find(c=>c.id===r.cinema_id)?.name||'سینما')+'</span><b>'+fmt(r.computed_results.score)+'</b></div>').join('')||'<p>هنوز ارزیابی نهایی هم‌نسخه ثبت نشده است.</p>')+'</article>');
- E("reportCategories").insertAdjacentHTML('beforeend','<article class="group-card"><h3>تاریخچه نسخه‌های این سینما</h3>'+records.filter(r=>r.cinema_id===currentId).map(r=>'<div class="report-sub"><span>نسخه '+count(r.model_version)+' · '+h(r.status)+' · '+h(new Date(r.updated_at).toLocaleDateString('fa-IR'))+'</span><b>'+ (typeof r.computed_results?.score==='number'?fmt(r.computed_results.score):'—')+'</b></div>').join('')+'<p>نتایج نسخه‌های متفاوت در رتبه‌بندی ترکیب نمی‌شوند.</p></article><article class="group-card"><h3>مدل، تطبیق سند و تصمیم‌های طراحی</h3><p>'+h(model.weightBasis)+'</p><button class="btn" id="exportModel">دریافت مدل کامل و جدول تطبیق (JSON)</button> <a class="btn" href="test-results.json" target="_blank">نتایج آزمون‌ها</a><p>نیازمند تصمیم: وزن‌های نهایی، حد تشخیص خطر، فعال‌سازی سقف ایمنی، سقف تشویقی و طبقه‌بندی سینماها. آستانه‌ها پیشنهاد طراحی‌اند و جای تأیید تخصصی را نمی‌گیرند.</p><details><summary>مشاهده همه جدول‌های اصلی سند</summary>'+(model.sourceArchive?.tables||[]).map(t=>'<details><summary>جدول '+count(t.table)+'</summary><div style="overflow:auto"><table>'+t.rows.map(row=>'<tr>'+row.map(c=>'<td style="border:1px solid #ddd;padding:8px">'+h(c)+'</td>').join('')+'</tr>').join('')+'</table></div></details>').join('')+'</details></article>');
- E('exportModel').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(model,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cinema-model-v'+modelVersion+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
- E("reportAlerts").innerHTML='<h3>قواعد، هشدارها و ملاحظات سند</h3>'+a.risk.map(x=>'<p class="danger-text"><b>هشدار ایمنی: </b>'+h(x.name)+" — "+fmt(x.score)+'</p>').join("")+a.ignored.map(x=>'<p class="info-text"><b>نامرتبط/مستثنا: </b>'+h(x.name)+" — "+h(x.why)+'</p>').join("")+(a.missing.length?'<p class="muted-text">'+count(a.missing.length)+' معیار اصلی هنوز تکمیل نشده و نتیجه موقت است.</p>':"")+notes;
-}
-function listCinemas(){
- E("cinemaList").innerHTML=cinemas.map(c=>{
- const r=recordFor(c.id,modelVersion),x=r?.computed_results||{};
- return '<button class="cinema-item '+(c.id===currentId?"current":"")+'" data-cinema="'+c.id+'"><span>'+h(c.name)+'</span><small>'+(r?(r.status==="completed"?"ثبت نهایی":"پیش‌نویس"):"بدون ارزیابی")+'</small><b>'+(typeof x.score==="number"?fmt(x.score):"—")+'</b></button>';
- }).join("");
-}
-function chooseCinema(id,force=false){
- const num=id?Number(id):null;
- if(dirty&&!force&&num!==currentId&&!confirm("تغییرات ذخیره نشده‌اند. سینما را بدون ذخیره تغییر می‌دهید؟")){E("cinemaSelect").value=String(currentId||"");return;}
- currentId=num;
- const r=recordFor(num,modelVersion);priorRecord=records.find(x=>x.cinema_id===num&&x.model_version<modelVersion);
- answers=deep(r?.responses||{});context=Object.assign({metro:"unknown",amenities:{}},deep(r?.profile_snapshot||{}));if(!context.amenities)context.amenities={};
- E("metroState").value=context.metro||"unknown";
- changed(false);tab="evaluate";axis="location";
- E("evaluateLink").classList.add("active");E("reportLink").classList.remove("active");
- E("oldVersionPrompt").classList.toggle("hidden",!priorRecord||!!r);
- const c=cinemas.find(x=>x.id===currentId);
- E('profileFields').innerHTML=(model.profileFields||[]).map(f=>'<label>'+h(f.title)+'<input class="profile-input" data-field="'+h(f.id)+'" type="'+(f.type==='number'?'number':'text')+'" '+(f.type==='number'?'min="0"':'')+' value="'+h(context.profile?.[f.id]??c?.[f.id]??'')+'"></label>').join('');
- E("selectedCinema").textContent=c?.name||"سینمایی انتخاب نشده";
- E("cinemaMeta").textContent=c?[c.province,c.city,count(c.halls||0)+" سالن",count(c.operational_seats||0)+" صندلی عملیاتی"].filter(Boolean).join(" | "):"";
- renderNav();renderGroups();renderSummary();renderAudit();listCinemas();
-}
-async function fetchRecords(){
- const {data,error}=await db.from("cinema_scoring_assessments").select("id,cinema_id,model_id,model_version,responses,profile_snapshot,computed_results,status,updated_at").eq("model_id",BASE.id).order("model_version",{ascending:false});
- if(error)throw error;records=data||[];listCinemas();
-}
-async function loadAll(){
- E("pageLoading").classList.remove("hidden");
- try{
-  // مدل جامع تنها پس از احراز هویت از داده‌های محافظت‌شده دریافت می‌شود؛ در صورت خطا ارزیابی ناقص فعال نمی‌شود.
-  model=await window.loadFullCinemaModel(db);
-  const [m,c,r]=await Promise.all([
-   db.from("cinema_scoring_model_overrides").select("*").eq("model_id",BASE.id).maybeSingle(),
-   db.from("cinemas").select("id,name,province,city,address,halls,total_seats,operational_seats,daily_shows").order("name"),
-   db.from("cinema_scoring_assessments").select("id,cinema_id,model_id,model_version,responses,profile_snapshot,computed_results,status,updated_at").eq("model_id",BASE.id).order("model_version",{ascending:false})
-  ]);
-  if(m.error||c.error||r.error)throw new Error(m.error?.message||c.error?.message||r.error?.message);
-  modelVersion=Number(m.data?.version)||2;
-  if(m.data?.definition){const d=m.data.definition;if(d.policy)Object.assign(model.policy,d.policy);for(const s of model.sections)if(d.weights&&d.weights[s.id]!==undefined)s.weight=Number(d.weights[s.id]);}
-  if(m.data?.definition){const d=m.data.definition;for(const sec of model.sections)for(const g of sec.groups){if(d.groupWeights?.[g.id]!==undefined)g.weight=d.groupWeights[g.id];for(const q of g.questions)if(d.rowWeights?.[q.id]!==undefined)q.weight=d.rowWeights[q.id];}}
-  model.version=modelVersion;cinemas=c.data||[];records=r.data||[];
-  if(!currentId&&cinemas.length)currentId=cinemas[0].id;
-  renderSelector();chooseCinema(currentId,true);E("pageLoading").classList.add("hidden");
- }catch(e){console.error(e);message("خطا در بارگذاری مدل یا اطلاعات: "+e.message,"error");E("pageLoading").classList.add("hidden");}
-}
-function setBusy(value){busy=value;E("saveDraft").textContent=value?"در حال ذخیره...":"ذخیره پیش‌نویس";E("saveComplete").textContent=value?"در حال ذخیره...":"نهایی‌کردن ارزیابی";renderSummary();}
-async function save(status){
- if(busy||!currentId)return;
- const invalid=Object.entries(answers).filter(([id,a])=>a.na&&(!a.note||a.note.trim().length<8)&&findQuestion(id)&&activeRule(findQuestion(id).q,findQuestion(id).g,findQuestion(id).s).yes);
- if(invalid.length){message("برای نامرتبط بودن هر معیار، دلیل حداقل ۸ کاراکتری وارد کنید.","error");return;}
- const a=calculate();
- if(status==="completed"&&!a.ready){message("ارزیابی همه معیارهای اصلی مرتبط باید تکمیل شود.","error");return;}
- if(status==="completed"&&a.risk.length&&!confirm("این ارزیابی دارای هشدار ایمنی است و با همین وضعیت ثبت خواهد شد. ادامه می‌دهید؟"))return;
- setBusy(true);
- try{
-  const now=new Date().toISOString();
-  const payload={cinema_id:currentId,model_id:BASE.id,model_version:modelVersion,model_snapshot:model,responses:answers,profile_snapshot:context,
-   computed_results:{score:a.score,raw:a.raw,bonus:a.bonus,coverage:a.coverage,risk:a.risk,exclusions:a.ignored,categoryScores:a.categories.map(x=>({id:x.id,score:x.score}))},
-   status,updated_by:actor?.id,updated_at:now,completed_at:status==="completed"?now:null};
-  const existing=recordFor(currentId,modelVersion);
-  let query=existing?db.from("cinema_scoring_assessments").update(payload).eq("id",existing.id).eq("updated_at",existing.updated_at):db.from("cinema_scoring_assessments").insert(payload);
-  const {data:saved,error}=await query.select('id');
-  if(!error&&!saved?.length)throw new Error('داده توسط همکار دیگری تغییر کرده است؛ صفحه را بازخوانی و تغییرات را بررسی کنید.');
-  if(error)throw error;
-  changed(false);message(status==="completed"?"ارزیابی کامل در پایگاه نسخه آزمایشی ثبت شد.":"پیش‌نویس در پایگاه نسخه آزمایشی ذخیره شد.","success");
-  await fetchRecords();
- }catch(e){console.error(e);message("ذخیره انجام نشد: "+e.message,"error");}finally{setBusy(false);}
-}
-function showOwner(){
- if(role!=="owner")return;
- const pairs=[
-  ["criticalFloor","آستانه نقص حساس ایمنی",0,5,.25],
-  ["criticalCap","سقف نمره نهایی با نقص ایمنی",0,5,.01],
-  ["bonusCap","سقف تشویقی امکانات جانبی",0,1,.05],
- ];
- E("editPolicies").innerHTML=pairs.map(([id,label,min,max,step])=>'<label>'+h(label)+'<input id="policy-'+id+'" type="number" min="'+min+'" max="'+max+'" step="'+step+'" value="'+h(model.policy[id])+'"></label>').join("");
- E("editWeights").innerHTML=model.sections.filter(s=>s.mode!=="bonus").map(s=>'<label>'+h(s.name)+'<input class="weight-edit" data-axis="'+h(s.id)+'" type="number" min="0" max="1" step=".01" value="'+h(s.weight)+'"></label>').join("");
- E("editWeights").insertAdjacentHTML('beforeend','<label>اعمال سقف در نقص بحرانی<select id="capEnabled"><option value="no">غیرفعال</option><option value="yes">فعال</option></select></label><label>تشویقی امکانات جانبی<select id="bonusEnabled"><option value="no">غیرفعال</option><option value="yes">فعال</option></select></label>');
- E('capEnabled').value=model.policy.criticalCapEnabled?'yes':'no';E('bonusEnabled').value=model.policy.bonusEnabled?'yes':'no';
- E("editWeights").insertAdjacentHTML('beforeend',model.sections.map(s=>'<details class="note-box"><summary>'+h(s.name)+' — وزن پارامترها و ردیف‌ها</summary>'+s.groups.filter(g=>g.mode!=='reference').map(g=>'<label>'+h(g.name)+'<input class="group-weight" data-section="'+s.id+'" data-group="'+g.id+'" type="number" min="0" max="1" step="any" value="'+g.weight+'"></label><details><summary>وزن ردیف‌های '+h(g.name)+'</summary>'+g.questions.map(q=>'<label>'+h(q.name)+'<input class="row-weight" data-group="'+g.id+'" data-row="'+q.id+'" type="number" min="0" max="1" step="any" value="'+q.weight+'"></label>').join('')+'</details>').join('')+'</details>').join(''));
- E("ownerDialog").showModal();
-}
-async function saveOwner(){
- if(role!=="owner")return;
- const policy=deep(model.policy),weights={};let ok=true,sum=0;
- for(const key of Object.keys(policy)){
-  const el=E("policy-"+key);if(!el)continue;const v=Number(el.value);
-  if(!Number.isFinite(v)||v<Number(el.min)||v>Number(el.max))ok=false;
-  policy[key]=v;
- }
- document.querySelectorAll(".weight-edit").forEach(el=>{const v=Number(el.value);if(el.value.trim()===""||!Number.isFinite(v)||v<0||v>1)ok=false;weights[el.dataset.axis]=v;sum+=v;});
- if(!ok||Math.abs(sum-1)>.001){message("حدها نامعتبرند یا جمع وزن‌های پایه دقیقاً برابر ۱ نیست. جمع فعلی: "+sum.toFixed(3),"error");return;}
- policy.criticalCapEnabled=E('capEnabled').value==='yes';policy.bonusEnabled=E('bonusEnabled').value==='yes';
- const groupWeights={},rowWeights={},groupTotals={},rowTotals={};
- for(const el of document.querySelectorAll('.group-weight,.row-weight')){const v=el.value.trim()===''?NaN:Number(el.value);if(!Number.isFinite(v)||v<0||v>1){message('وزن نامعتبر است','error');return;}if(el.dataset.row){rowWeights[el.dataset.row]=v;rowTotals[el.dataset.group]=(rowTotals[el.dataset.group]||0)+v;}else{groupWeights[el.dataset.group]=v;groupTotals[el.dataset.section]=(groupTotals[el.dataset.section]||0)+v;}}
- if([...Object.values(groupTotals),...Object.values(rowTotals)].some(v=>Math.abs(v-1)>0.000001)){message('جمع وزن‌ها در هر شاخص و پارامتر باید ۱ باشد','error');return;}
- if(dirty){message('ابتدا تغییرات ارزیابی را ذخیره کنید','error');return;}
- if(!confirm("این تغییر نسخه جدید ارزیابی ایجاد می‌کند. ارزیابی‌های قبلی محفوظ می‌مانند. ادامه می‌دهید؟"))return;
- try{
-  const payload={model_id:BASE.id,definition:{policy,weights,groupWeights,rowWeights},version:modelVersion+1,updated_at:new Date().toISOString(),updated_by:actor?.id};
-  const {data:current,error:readError}=await db.from('cinema_scoring_model_overrides').select('version').eq('model_id',BASE.id).maybeSingle();if(readError)throw readError;
-  if(current&&current.version!==modelVersion)throw new Error('نسخه مدل توسط مالک تغییر کرده؛ صفحه را تازه کنید.');
-  const query=current?db.from('cinema_scoring_model_overrides').update(payload).eq('model_id',BASE.id).eq('version',modelVersion):db.from('cinema_scoring_model_overrides').insert(payload);
-  const {data:saved,error}=await query.select('model_id');if(error)throw error;if(!saved?.length)throw new Error('نسخه تغییر کرده؛ صفحه را تازه کنید.');E("ownerDialog").close();changed(false);message("قواعد نسخه جدید ثبت شد.","success");await loadAll();
- }catch(e){message("ذخیره قواعد ناموفق بود: "+e.message,"error");}
-}
-function importPrior(){
- if(!priorRecord)return;
- if(!confirm("پاسخ‌های نسخه قبلی به پیش‌نویس منتقل می‌شوند؛ همه شرط‌های جدید نیاز به بازبینی دارند. ادامه می‌دهید؟"))return;
- answers=deep(priorRecord.responses||{});context=Object.assign({metro:"unknown",amenities:{}},deep(priorRecord.profile_snapshot||{}));
- E("metroState").value=context.metro;E("oldVersionPrompt").classList.add("hidden");changed();renderGroups();renderNav();renderSummary();renderAudit();message("پاسخ‌ها به پیش‌نویس منتقل شدند؛ هنوز در پایگاه ذخیره نشده‌اند.");
-}
-async function authorize(user){
- const {data,error}=await db.from("admin_users").select("user_id,role").eq("user_id",user.id).maybeSingle();
- if(error||!data){E("loginError").textContent="این حساب مجوز مدیریت سینماها را ندارد.";await db.auth.signOut();return;}
- actor=user;role=data.role;E("authOverlay").classList.add("hidden");E("accountName").textContent=user.email||"مدیر";await loadAll();
-}
-function lock(){actor=null;role=null;E("authOverlay").classList.remove("hidden");E("loginError").textContent="";}
-async function login(event){
- event.preventDefault();const btn=E("loginBtn");btn.disabled=true;E("loginError").textContent="";
- try{
-  const identifier=E("loginEmail").value.trim().toLowerCase(),email=identifier.includes("@")?identifier:identifier+"@users.example.com",password=E("loginPassword").value;
-  const {data,error}=await db.auth.signInWithPassword({email,password});
-  if(error)throw error;if(data?.user)await authorize(data.user);
- }catch(e){E("loginError").textContent="خطای ورود: "+e.message;}finally{btn.disabled=false;}
-}
-function wire(){
- E('profileFields').addEventListener('input',e=>{if(e.target.dataset.field){context.profile=context.profile||{};context.profile[e.target.dataset.field]=e.target.value;changed();}});
- E("loginForm").addEventListener("submit",login);
- E("logoutBtn").addEventListener("click",async()=>{if(dirty&&!confirm("تغییرات ذخیره نشده‌اند. خارج شوید؟"))return;await db.auth.signOut();lock();});
- E("cinemaSelect").addEventListener("change",e=>chooseCinema(e.target.value));
- E("metroState").addEventListener("change",e=>{context.metro=e.target.value;changed();renderGroups();renderNav();renderSummary();renderAudit();});
- E("sectionsNav").addEventListener("click",e=>{const b=e.target.closest("[data-section]");if(!b)return;axis=b.dataset.section;tab="evaluate";E("evaluateLink").classList.add("active");E("reportLink").classList.remove("active");renderGroups();renderNav();});
- E("cinemaList").addEventListener("click",e=>{const b=e.target.closest("[data-cinema]");if(!b)return;chooseCinema(b.dataset.cinema);E("cinemaSelect").value=String(currentId||"");});
- E("groupsWrap").addEventListener("change",e=>{
-  const t=e.target;
-  if(t.classList.contains('parking-input')||t.id==='parkingVerified'){context.parking=context.parking||{};if(t.id==='parkingVerified')context.parking.verified=t.checked;else context.parking[t.dataset.field]=t.value===''?'':Number(t.value);changed();renderGroups();renderSummary();renderNav();renderAudit();return;}
-  if(t.classList.contains("amenity-select")){context.amenities[t.dataset.group]=t.value;changed();renderGroups();renderSummary();renderNav();renderAudit();return;}
-  const id=t.dataset.question;if(!id)return;
-  const a=answers[id]||{score:null,na:false,note:""};
-  if(t.classList.contains("score-select"))a.score=t.value===""?null:Number(t.value);
-  if(t.classList.contains("na-toggle")){a.na=t.checked;if(a.na)a.score=null;}
-  answers[id]=a;changed();
-  if(t.classList.contains("na-toggle")||t.dataset.question==="parking_info_t2_1"||t.dataset.question==="parking_own")renderGroups();
-  renderSummary();renderNav();renderAudit();
- });
- E("groupsWrap").addEventListener("input",e=>{const t=e.target;
- if(t.classList.contains('parking-input')){context.parking=context.parking||{};context.parking[t.dataset.field]=t.value===''?'':Number(t.value);changed();renderSummary();renderNav();renderAudit();}
- if(t.classList.contains('row-evidence')){answers[t.dataset.question]={...(answers[t.dataset.question]||{}),evidence:t.value};changed();}
- if(t.classList.contains('group-evidence')){context.evidence=context.evidence||{};context.evidence[t.dataset.group]=t.value;changed();}
- if(t.classList.contains('support-input')){context.support=context.support||{};context.support[t.dataset.support]=t.value;changed();}
-if(t.classList.contains("na-note")){const id=t.dataset.question;answers[id]=Object.assign({score:null,na:false,note:""},answers[id]||{},{note:t.value});changed();renderSummary();renderAudit();}});
- E("evaluateLink").addEventListener("click",()=>{tab="evaluate";E("evaluateLink").classList.add("active");E("reportLink").classList.remove("active");renderGroups();});
- E("reportLink").addEventListener("click",report);
- E("saveDraft").addEventListener("click",()=>save("draft"));
- E("saveComplete").addEventListener("click",()=>save("completed"));
- E("auditToggle").addEventListener("click",()=>E("auditPanel").classList.toggle("hidden"));
- E("policyOwnerBtn").addEventListener("click",showOwner);
- E("ownerClose").addEventListener("click",()=>E("ownerDialog").close());
- E("ownerSave").addEventListener("click",saveOwner);
- E("importOld").addEventListener("click",importPrior);
- window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue="";}});
-}
+async function saveModel(){if(busy||role!=='owner')return;if(dirty){toast('ابتدا ارزیابی جاری را ذخیره کنید؛ سپس نسخه مدل را تغییر دهید.',true);return;}const errors=tools.validate(editor);for(const key of ['criticalFloor','criticalCap'])if(editor.policy[key]===null||!Number.isFinite(editor.policy[key])||editor.policy[key]<0||editor.policy[key]>5)errors.push('آستانه یا سقف باید بین صفر و پنج باشد.');if(errors.length){toast(errors[0],true);return;}if(!confirm('نسخه جدید مدل ایجاد شود؟ نتایج نسخه‌های قبلی با مدل خودشان محفوظ می‌مانند.'))return;busy=true;$('saveModel').disabled=true;
+ try{const {data:existing,error:readError}=await db.from('cinema_scoring_model_overrides').select('version').eq('model_id',ID).maybeSingle();if(readError)throw readError;if(existing&&Number(existing.version)!==version)throw new Error('نسخه مدل همزمان تغییر کرده است؛ ابتدا اطلاعات را تازه‌سازی کنید.');
+ const next=tools.snapshot(editor);next.version=version+1;const now=new Date().toISOString(),nextHistory=[...history,{version,model:tools.snapshot(model),saved_at:now,note:model.versionNote||'مدل پیش از تغییر'}],payload={model_id:ID,version:version+1,definition:{fullModel:next,history:nextHistory},updated_by:user.id,updated_at:now};
+ const q=existing?db.from('cinema_scoring_model_overrides').update(payload).eq('model_id',ID).eq('version',version):db.from('cinema_scoring_model_overrides').insert(payload);const {data,error}=await q.select('model_id');if(error)throw error;if(!data?.length)throw new Error('نسخه همزمان تغییر کرده است.');editor=null;await load();toast('نسخه جدید مدل ذخیره شد. ارزیابی‌های قبلی در تاریخچه محفوظ‌اند.');
+ }catch(e){toast('ذخیره مدل انجام نشد: '+e.message,true);}finally{busy=false;if($('saveModel'))$('saveModel').disabled=false;}}
+async function readRecords(){const {data,error}=await db.from('cinema_scoring_assessments').select('*').eq('model_id',ID).order('model_version',{ascending:false});if(error)throw error;records=data||[];}
+async function load(){busy=true;$('loading').classList.remove('hidden');$('errorPanel').classList.add('hidden');
+ try{const base=await window.loadFullCinemaModel(db);const [m,c,r]=await Promise.all([db.from('cinema_scoring_model_overrides').select('*').eq('model_id',ID).maybeSingle(),db.from('cinemas').select('*').order('name'),db.from('cinema_scoring_assessments').select('*').eq('model_id',ID).order('model_version',{ascending:false})]);if(m.error||c.error||r.error)throw new Error(m.error?.message||c.error?.message||r.error?.message);model=m.data?.definition?.fullModel?{...base,...m.data.definition.fullModel,sourceArchive:base.sourceArchive}:base;const modelErrors=tools.validate(model);if(modelErrors.length)throw new Error('ساختار مدل ذخیره‌شده نامعتبر است: '+modelErrors[0]);version=Number(m.data?.version)||1;model.version=version;viewVersion=version;history=m.data?.definition?.history||[];cinemas=c.data||[];records=r.data||[];ready=true;if(!cinemaId||!cinemas.some(c=>Number(c.id)===Number(cinemaId)))cinemaId=cinemas[0]?.id||null;if(cinemaId)selectState(cinemaId,true);if(route==='schema')editor=clone(model);
+ }catch(e){ready=false;$('errorPanel').textContent='بارگذاری انجام نشد: '+e.message+' — از دکمه تازه‌سازی استفاده کنید.';$('errorPanel').classList.remove('hidden');}finally{busy=false;$('loading').classList.add('hidden');render();}}
+async function authorize(u){const {data,error}=await db.from('admin_users').select('user_id,role').eq('user_id',u.id).maybeSingle();if(error)throw error;if(!data)throw new Error('این حساب مجوز دسترسی به داشبورد را ندارد.');user=u;role=data.role;$('account').textContent=u.email||'مدیر';$('auth').classList.add('hidden');await load();}
+function lock(){ready=false;user=null;role=null;model=null;editor=null;records=[];cinemas=[];answers={};context={};dirty=false;$('content').innerHTML='';$('password').value='';$('auth').classList.remove('hidden');}
 async function init(){
- wire();
- if(!window.supabase?.createClient){E("loginError").textContent="کتابخانه Supabase بارگذاری نشد. صفحه را مجدداً باز کنید.";return;}
- db=window.supabase.createClient(API_URL,API_KEY);
- db.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")lock();});
- const {data,error}=await db.auth.getSession();
- if(error){E("loginError").textContent=error.message;return;}
- if(data?.session?.user)await authorize(data.session.user);
+ $('loginForm').onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;$('loginButton').disabled=true;$('loginError').textContent='';try{const x=$('identifier').value.trim().toLowerCase(),email=x.includes('@')?x:x+'@users.example.com';const {data,error}=await db.auth.signInWithPassword({email,password:$('password').value});if(error)throw error;await authorize(data.user);$('password').value='';}catch(e){$('loginError').textContent='ورود انجام نشد: '+e.message;}finally{busy=false;$('loginButton').disabled=false;}};
+ document.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>nav(b.dataset.route));$('goEvaluate').onclick=()=>nav('evaluate');$('refresh').onclick=()=>{if((dirty||route==='schema'&&editorChanged())&&!confirm('تغییرات ذخیره‌نشده کنار گذاشته و اطلاعات از سرور خوانده شود؟'))return;load();};$('logout').onclick=async()=>{if((dirty||route==='schema'&&editorChanged())&&!confirm('تغییرات ذخیره نشده‌اند؛ از حساب خارج می‌شوید؟'))return;const {error}=await db.auth.signOut();if(error){toast(error.message,true);return;}lock();};
+ $('content').addEventListener('change',e=>{if(e.target.id==='cinemaPicker'){if(selectState(e.target.value))render();else e.target.value=cinemaId;}});
+ $('content').addEventListener('click',e=>{const p=e.target.closest('[data-open-profile]');if(p){if(selectState(p.dataset.openProfile)){profileVersion=Number(p.dataset.profileVersion)||version;nav('profile');}}const r=e.target.closest('[data-download-record]');if(r){const item=records.find(x=>x.id===r.dataset.downloadRecord);if(item)download('assessment-'+item.cinema_id+'-v'+item.model_version+'.json',JSON.stringify(item,null,2));}const hist=e.target.closest('[data-history-export]');if(hist){const item=history.find(x=>x.version===Number(hist.dataset.historyExport));if(item)download('model-v'+item.version+'.json',JSON.stringify(item.model,null,2));}});
+ window.addEventListener('beforeunload',e=>{if(dirty||route==='schema'&&editorChanged()){e.preventDefault();e.returnValue='';}});
+ if(!window.supabase?.createClient){$('loginError').textContent='کتابخانه اتصال بارگذاری نشده است؛ صفحه را دوباره باز کنید.';return;}
+ db=window.supabase.createClient(API,KEY);db.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')lock();});try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data?.session?.user)await authorize(data.session.user);}catch(e){$('loginError').textContent=e.message;}
 }
-document.addEventListener("DOMContentLoaded",init);
-window.scoringPreviewDebug={calculate:()=>calculate(),currentModel:()=>deep(model)};
+document.addEventListener('DOMContentLoaded',init);
 })();
