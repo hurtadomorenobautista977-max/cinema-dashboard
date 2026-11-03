@@ -1,6 +1,6 @@
 /* خواندن مدل جامع استخراج‌شده از سند ۴۴ صفحه‌ای، بدون وابستگی به قالب قدیمی داشبورد */
-window.loadFullCinemaModel = async function () {
- const {data,error}=await arguments[0].from("cinema_scoring_source_models").select("payload_base64").eq("id",window.CINEMA_MODEL.id).single();
+window.loadFullCinemaModel = async function (client) {
+ const {data,error}=await client.from("cinema_scoring_source_models").select("payload_base64").eq("id",window.CINEMA_MODEL.id).single();
  if(error||!data?.payload_base64)throw Error("مدل جامع فقط برای مدیر مجاز قابل دریافت است: "+(error?.message||"داده‌ای یافت نشد"));
  const encoded=data.payload_base64;
  if(typeof DecompressionStream==="undefined")throw Error("مرورگر از بازکردن داده‌های فشرده پشتیبانی نمی‌کند.");
