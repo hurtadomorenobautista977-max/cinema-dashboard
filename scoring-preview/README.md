@@ -50,3 +50,15 @@
 ورود و چرخه ذخیره واقعی با حساب مدیر در این اجرا قابل تأیید نبود. اعتبارسنجی محاسبات سمت سرور مستقل از client هنوز پیاده نشده است؛ برای بهره‌برداری رسمی و مقابله با دستکاری عمدی توسط مدیر مجاز باید تکمیل شود. شواهد به شکل متن و نشانی ثبت می‌شوند؛ آپلود فایل جداگانه وجود ندارد.
 
 در نسخه جدید مدل، پاسخ‌های نسخه قبلی می‌توانند با اقدام کاربر به پیش‌نویس منتقل شوند؛ ردیف حذف‌شده کنار گذاشته و ردیف جدید بررسی‌نشده باقی می‌ماند. نتیجه با وزن‌های جدید محاسبه می‌شود و سابقه قبلی تغییر نمی‌کند.
+
+
+## 2026-11-04 — row conditions, scoped alerts and management UI
+
+- Six source indices, 38 parameters and 134 mapped table rows retained. Local audit against the DOCX: 39 tables, zero cell differences.
+- Management opens with an index map, then index details and parameter drawers. Weight dialogs show all siblings, proportional redistribution, locks and explicit Apply/Cancel. New index/parameter names are entered in a dialog.
+- Row guidance is edited in a dialog. Independent dialogs configure row activation and warning/cap scope. Conditions reference a scored row or another parameter; missing reference scores remain pending. Self references, cycles and removed sources block model saving.
+- Manual parameter exclusion is per assessment, requires a reason and is stored in profile_snapshot, without changing baseline weights.
+- Disabled rows and excluded parameters redistribute their share locally. Effective row weights are shown during evaluation.
+- Warning-only alerts never cap scores. When the global cap policy is enabled, row alerts can cap parameter, index or cinema score. Cap policy defaults to disabled; new base models use a cap of 3/5. Saved model policies remain intact.
+- Cinema directory and profile views have independent hash routes (`#/cinemas`, `#/cinemas/ID?version=N`), with direct loading and browser history. The detail view replaces the content instead of scrolling to a section.
+- Checks: 14 legacy calculation tests + 17 model management tests + 17 condition/cap tests. DOM interaction checks use synthetic data, covering dialogs, weights, parameter creation, model save, exclusions, draft, complete assessment and ranking. No production evaluation records were created as tests.

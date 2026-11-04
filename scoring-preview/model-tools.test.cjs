@@ -12,4 +12,10 @@ test('منبع و snapshot قبلی پس از حذف ردیف در نسخه جد
 test('رد شناسه تکراری و وزن خالی',()=>{const m=base();m.sections[0].groups[0].questions[0].weight=null;m.sections[0].groups[0].questions[1].id='a';assert.ok(T.validate(m).some(e=>e.includes('شناسه')));assert.ok(T.validate(m).some(e=>e.includes('وزن نامعتبر')));});
 test('رتبه برابر برای امتیازهای برابر با پرش رتبه بعدی',()=>{const scores=[5,4,4,3];assert.equal(T.rank(scores,4),2);assert.equal(T.rank(scores,3),4);});
 test('انتقال پاسخ‌های نسخه قبلی بدون ردیف حذف‌شده و با حفظ ردیف جدیدِ بررسی‌نشده',()=>{const m=base();const old={a:{score:4},removed:{score:5}};const carried=T.carryResponses(m,old);assert.deepEqual(Object.keys(carried),['a']);assert.equal(carried.b,undefined);carried.a.score=1;assert.equal(old.a.score,4);});
+test('افزودن پارامتر با سهم اولیه و حفظ نسبت سایر وزن‌ها',()=>{const xs=[{weight:.6},{weight:.4}],item={weight:0};xs.push(item);T.setNewShare(xs,item);assert.ok(Math.abs(xs[0].weight-.4)<1e-12);assert.ok(Math.abs(xs[1].weight-4/15)<1e-12);assert.ok(Math.abs(item.weight-1/3)<1e-12);assert.ok(Math.abs(xs.reduce((n,x)=>n+x.weight,0)-1)<1e-12);});
+test('تغییر یک سهم با تنظیم متناسب سهم‌های آزاد',()=>{const w=T.adjustShares([.5,.3,.2],0,.7);assert.deepEqual(w.map(x=>Math.round(x*100)),[70,18,12]);assert.ok(Math.abs(w.reduce((a,b)=>a+b,0)-1)<1e-12);});
+test('حفظ سهم‌های ثابت در دیالوگ',()=>{const w=T.adjustShares([.5,.3,.2],1,.4,[0]);assert.ok(Math.abs(w[0]-.5)<1e-12);assert.ok(Math.abs(w[1]-.4)<1e-12);assert.ok(Math.abs(w[2]-.1)<1e-12);});
+test('جلوگیری از تجاوز مجموع وزن‌ها از ۱۰۰٪ با سهم ثابت',()=>{const w=T.adjustShares([.5,.3,.2],1,.9,[0]);assert.deepEqual(w,[.5,.5,0]);});
+test('وزن تنها ردیف فعال همیشه ۱۰۰٪ باقی می‌ماند',()=>assert.deepEqual(T.adjustShares([1],0,.25),[1]));
+test('ثابت بودن یک ورودی مانع تغییر آن است',()=>assert.deepEqual(T.adjustShares([.5,.5],0,.2,[0]),[.5,.5]));
 require('fs').writeFileSync(__dirname+'/model-test-results.json',JSON.stringify(checks,null,2));console.log(checks.length+' model tests passed');
