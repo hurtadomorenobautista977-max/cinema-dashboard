@@ -1,0 +1,11 @@
+{
+  "document_sha256": "9ef7657ad28ade653739dfbb62c133589a5f66082664976480712a9bc5a8fa2d",
+  "tables": 17,
+  "rows": 67,
+  "exact_row_match": true,
+  "exact_paragraph_match": true,
+  "duplicate_titled_tables_preserved": [
+    5,
+    6
+  ]
+}
